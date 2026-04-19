@@ -1,0 +1,22 @@
+name: CI when a PR to main opened
+
+on:
+  pull_request:
+    types:
+      - opened
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    # Môi trường chạy
+    runs-on: ubuntu-latest
+
+    # Các bước thực hiện
+    steps:
+      - name: Checkout code from branch main
+        uses: actions/checkout@v4
+
+      - name: Preview current branch
+        run: |
+          echo "Source branch: ${{ github.head_ref }}"
