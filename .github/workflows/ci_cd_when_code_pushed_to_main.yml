@@ -1,9 +1,7 @@
-name: CI when a PR to main opened
+name: CI/CD when code pushed to main
 
 on:
-  pull_request:
-    types:
-      - opened
+  push:
     branches:
       - main
 
