@@ -1,4 +1,4 @@
-name: CI when a PR to main opened
+name: CI when a PR to main opened, synchronized, or reopened
 
 on:
   pull_request:
