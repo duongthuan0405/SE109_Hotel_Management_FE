@@ -10,7 +10,7 @@ on:
       - main
 
 jobs:
-  build-and-push:
+  checkout-and-build:
     # Môi trường chạy
     runs-on: ubuntu-latest
 
@@ -20,3 +20,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+
+      - name: Log information
+        run: |
+          echo "Pull Request #${{ github.event.number }} opened by ${{ github.event.pull_request.user.login }}"
+          echo "Source branch: ${{ github.head_ref }}"
+          echo "Target branch: ${{ github.base_ref }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Build and Test
+        run: |
+          npm install
+          npm run build
+          # npm test
