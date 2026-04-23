@@ -4,6 +4,8 @@ on:
   pull_request:
     types:
       - opened
+      - synchronize
+      - reopened
     branches:
       - main
 
@@ -14,9 +16,7 @@ jobs:
 
     # Các bước thực hiện
     steps:
-      - name: Checkout code from branch main
+      - name: Checkout code from source branch
         uses: actions/checkout@v4
-
-      - name: Preview current branch
-        run: |
-          echo "Current branch: ${{ github.head_ref }}"
+        with:
+          ref: ${{ github.head_ref }}
