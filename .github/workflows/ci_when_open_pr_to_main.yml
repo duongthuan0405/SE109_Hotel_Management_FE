@@ -14,6 +14,10 @@ jobs:
     # Môi trường chạy
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        node-version: [20]
+
     # Các bước thực hiện
     steps:
       - name: Checkout code from source branch
@@ -30,7 +34,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ matrix.node-version }}
           cache: "npm"
 
       - name: Build and Test
