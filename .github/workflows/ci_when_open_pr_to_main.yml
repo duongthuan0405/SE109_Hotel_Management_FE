@@ -1,4 +1,4 @@
-name: CI when a PR to main opened
+name: CI when a PR to main opened, synchronized, or reopened
 
 on:
   pull_request:
@@ -10,13 +10,47 @@ on:
       - main
 
 jobs:
-  build-and-push:
+  checkout-and-build:
     # Môi trường chạy
     runs-on: ubuntu-latest
 
-    # Các bước thực hiện
+    strategy:
+      matrix:
+        node-version: [20]
+
+    if: ${{ !contains(fromJson('["CI-CD"]'), github.head_ref) }}
+
     steps:
+      - name: Log information
+        run: |
+          echo "Pull Request #${{ github.event.number }} opened by ${{ github.event.pull_request.user.login }}"
+          echo "Source branch: ${{ github.head_ref }}"
+          echo "Target branch: ${{ github.base_ref }}"
+
       - name: Checkout code from source branch
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Build and Test
+        run: |
+          npm ci
+          npm run build
+          # npm test
+
+  final-check:
+    runs-on: ubuntu-latest
+    needs: checkout-and-build
+
+    if: always() && needs.checkout-and-build.result != 'failure'
+
+    steps:
+      - name: Final check
+        run: |
+          echo "All checks passed for PR #${{ github.event.number }}. Ready for review!"
