@@ -18,6 +18,9 @@ jobs:
       matrix:
         node-version: [20]
 
+    # Không chạy khi source branch là CI-CD
+    if: github.head_ref != 'CI-CD'
+
     # Các bước thực hiện
     steps:
       - name: Checkout code from source branch
