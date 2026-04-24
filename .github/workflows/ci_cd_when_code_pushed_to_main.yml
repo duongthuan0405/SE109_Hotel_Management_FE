@@ -6,15 +6,63 @@ on:
       - main
 
 jobs:
-  build-and-push:
-    # Môi trường chạy
+  checkout-and-build:
     runs-on: ubuntu-latest
 
-    # Các bước thực hiện
-    steps:
-      - name: Checkout code from branch main
-        uses: actions/checkout@v4
+    strategy:
+      matrix:
+        node-version: [20]
 
-      - name: Preview current branch
+    steps:
+      - name: Log information
         run: |
           echo "Current branch: ${{ github.head_ref }}"
+
+      - name: Checkout code from main branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Build and Test
+        run: |
+          npm ci
+          npm run build
+          # npm test
+
+  build-container-and-push-to-registry:
+    runs-on: ubuntu-latest
+    needs: checkout-and-build
+
+    steps:
+      - name: Log information
+        run: |
+          echo "Current branch: ${{ github.head_ref }}"
+
+      - name: Checkout code from main branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Sign in to Docker Hub
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/hotel-management-fe:latest ./hotel-management-fe
+          docker push ${{ secrets.DOCKER_USERNAME }}/hotel-management-fe:latest
+
+  deploy-to-production:
+    runs-on: ubuntu-latest
+    needs: build-container-and-push-to-registry
+
+    steps:
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment..."
