@@ -1,4 +1,4 @@
-name: CI when a PR to main opened
+name: CI when a PR to main opened, synchronized, or reopened
 
 on:
   pull_request:
@@ -10,9 +10,13 @@ on:
       - main
 
 jobs:
-  build-and-push:
+  checkout-and-build:
     # Môi trường chạy
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20]
 
     # Các bước thực hiện
     steps:
@@ -20,3 +24,36 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+
+      - name: Log information
+        run: |
+          echo "Pull Request #${{ github.event.number }} opened by ${{ github.event.pull_request.user.login }}"
+          echo "Source branch: ${{ github.head_ref }}"
+          echo "Target branch: ${{ github.base_ref }}"
+
+      - name: Guard some branches
+        id: guard_branches
+        run: |
+          SKIP_BRANCHES=("CI-CD")
+
+          for b in "${SKIP_BRANCHES[@]}"; do
+            if [ "$b" = "${{ github.head_ref }}" ]; then
+              echo "skip=true" >> $GITHUB_OUTPUT
+              echo "Skip build for branch: $b"
+              exit 0
+            fi
+          done
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        if: steps.guard_branches.outputs.skip != 'true'
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Build and Test
+        if: steps.guard_branches.outputs.skip != 'true'
+        run: |
+          npm ci
+          npm run build
+          # npm test
