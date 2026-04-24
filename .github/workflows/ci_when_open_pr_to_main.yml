@@ -29,16 +29,16 @@ jobs:
 
       - name: Checkout code from source branch
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: "npm"
+          cache-dependency-path: ./hotel-management-fe/package-lock.json
 
       - name: Build and Test
+        working-directory: ./hotel-management-fe
         run: |
           npm ci
           npm run build
