@@ -48,6 +48,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: checkout-and-build
 
+    if: |
+      always() && !cancelled() && 
+      (needs.checkout-and-build.result == 'success' || needs.checkout-and-build.result == 'skipped')
+
     steps:
       - name: Final check
         run: |
