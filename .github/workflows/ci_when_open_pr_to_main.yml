@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: checkout-and-build
 
-    if: needs.checkout-and-build.result != 'failure'
+    if: always() && needs.checkout-and-build.result != 'failure'
 
     steps:
       - name: Final check
