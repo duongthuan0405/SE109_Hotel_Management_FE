@@ -19,6 +19,7 @@ export { default as serviceUsageHistoryApi } from './serviceUsageHistoryApi';
 export { default as datPhongApi } from './datPhongApi';
 export { default as roomTypeApi } from './roomTypeApi';
 export { default as stripeApi } from './stripeApi';
+export { default as notificationApi } from "./notificationAPI";
 
 // Export utility functions
 export {
