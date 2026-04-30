@@ -3,15 +3,12 @@
 const API_BASE_URL = "http://localhost:5000/api";
 const API_URL = `${API_BASE_URL}/notifications`;
 
-
 const getToken = () => localStorage.getItem("token");
-
 
 const getHeaders = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${getToken()}`,
 });
-
 
 const getNotificationsForGuest = async () => {
   try {
@@ -44,8 +41,9 @@ const markNotificationAsRead = async (id) => {
 };
 
 
-export default {
+const notificationApi = {
   getNotificationsForGuest,
   markNotificationAsRead,
 };
 
+export default notificationApi;
