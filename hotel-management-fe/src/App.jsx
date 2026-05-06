@@ -88,7 +88,7 @@ const App = () => (
               <ProtectedRoute
                 allowRoles={[
                   "Admin",
-                  "Manager",
+                  "Staff",
                   "Receptionist",
                 ]}
               >
@@ -115,7 +115,7 @@ const App = () => (
           <Route
             path="/bookings"
             element={
-              <ProtectedRoute allowRoles={["Admin", "Manager", "Receptionist"]}>
+              <ProtectedRoute allowRoles={["Admin", "Staff", "Receptionist"]}>
                 <AppLayout>
                   <Bookings />
                 </AppLayout>
@@ -139,7 +139,7 @@ const App = () => (
           <Route
             path="/guests"
             element={
-              <ProtectedRoute allowRoles={["Admin", "Manager", "Receptionist"]}>
+              <ProtectedRoute allowRoles={["Admin", "Staff", "Receptionist"]}>
                 <AppLayout>
                   <Guests />
                 </AppLayout>
