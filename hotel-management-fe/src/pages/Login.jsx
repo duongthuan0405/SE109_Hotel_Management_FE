@@ -68,7 +68,7 @@ export default function Login() {
 
       if (
         result.VaiTro === "Admin" ||
-        result.VaiTro === "Manager" ||
+        result.VaiTro === "Staff" ||
         result.VaiTro === "Receptionist"
       ) {
         navigate("/dashboard", { replace: true });

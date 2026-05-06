@@ -31,7 +31,7 @@ const menuItems = [
     title: "Tổng quan",
     url: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["Admin", "Manager", "Receptionist"],
+    roles: ["Admin", "Staff", "Receptionist"],
   },
   {
     title: "Phòng",
@@ -43,7 +43,7 @@ const menuItems = [
     title: "Đặt phòng",
     url: "/bookings",
     icon: CalendarCheck,
-    roles: ["Admin", "Manager", "Receptionist"],
+    roles: ["Admin", "Staff", "Receptionist"],
   },
   {
     title: "Lịch",
@@ -55,7 +55,7 @@ const menuItems = [
     title: "Khách hàng",
     url: "/guests",
     icon: Users,
-    roles: ["Admin", "Manager", "Receptionist"],
+    roles: ["Admin", "Staff", "Receptionist"],
   },
   {
     title: "Hóa đơn",

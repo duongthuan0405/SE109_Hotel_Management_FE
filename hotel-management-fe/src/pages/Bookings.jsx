@@ -62,7 +62,7 @@ export default function Bookings() {
     HangPhong: "",
     NgayDen: "",
     NgayDi: "",
-    SoKhach: 1,
+    SoLuongPhong: 1,
     TienCoc: 0,
     GhiChu: "",
   });
@@ -159,7 +159,7 @@ export default function Bookings() {
             HangPhong: formData.HangPhong,
             NgayDen: formData.NgayDen,
             NgayDi: formData.NgayDi,
-            SoKhach: Number(formData.SoKhach) || 1,
+            SoLuongPhong: Number(formData.SoLuongPhong) || 1,
             TienCoc: Number(formData.TienCoc) || 0,
             GhiChu: formData.GhiChu,
             ChiTietDatPhong: [],
@@ -177,7 +177,7 @@ export default function Bookings() {
             HangPhong: formData.HangPhong,
             NgayDen: formData.NgayDen,
             NgayDi: formData.NgayDi,
-            SoKhach: Number(formData.SoKhach) || 1,
+            SoLuongPhong: Number(formData.SoLuongPhong) || 1,
             TienCoc: Number(formData.TienCoc) || 0,
             GhiChu: formData.GhiChu,
             ChiTietDatPhong: [],
@@ -196,7 +196,7 @@ export default function Bookings() {
         HangPhong: "",
         NgayDen: "",
         NgayDi: "",
-        SoKhach: 1,
+        SoLuongPhong: 1,
         TienCoc: 0,
         GhiChu: "",
       });
@@ -874,6 +874,18 @@ export default function Bookings() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="rooms">Số lượng phòng</Label> {/* Đổi label */}
+                    <Input
+                      id="rooms"
+                      type="number"
+                      min="1"
+                      value={formData.SoLuongPhong}
+                      onChange={(e) =>
+                        setFormData({ ...formData, SoLuongPhong: e.target.value })
+                      }
+                    />
+                  </div>
                  <div className="grid gap-2">
                     <Label htmlFor="deposit">Tiền cọc (VNĐ)</Label>
                     <Input
@@ -1007,6 +1019,32 @@ export default function Bookings() {
                   </p>
                 </div>
               </div>
+              {/* Phần hiển thị thông tin Phòng từ ChiTietDatPhong */}
+          <div className="col-span-2 mt-4 border-t pt-4">
+            <h3 className="font-bold mb-2">Thông tin phòng cụ thể:</h3>
+            {selectedBooking.ChiTietDatPhong && selectedBooking.ChiTietDatPhong.length > 0 ? (
+              <div className="space-y-3">
+                {selectedBooking.ChiTietDatPhong.map((item, index) => (
+                  <div key={index} className="grid grid-cols-2 gap-4 bg-muted/50 p-3 rounded-lg">
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Mã số phòng</Label>
+                      <p className="font-medium text-primary">
+                        {item.Phong?.MaPhong || "Chưa gán phòng"}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Giá phòng (VNĐ)</Label>
+                      <p className="font-medium">
+                        {item.Phong?.GiaPhong?.toLocaleString("vi-VN") || 0}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">Chưa có chi tiết phòng.</p>
+            )}
+          </div>
               {selectedBooking.GhiChu && (
                 <div>
                   <Label className="text-muted-foreground">Ghi chú</Label>
@@ -1067,9 +1105,9 @@ export default function Bookings() {
                 </p>
               </div>
               <div>
-                <Label className="text-muted-foreground">Số khách</Label>
+                <Label className="text-muted-foreground">Số lượng phòng</Label>
                 <p className="text-lg font-semibold">
-                  {selectedBooking.SoKhach} người
+                  {selectedBooking.SoLuongPhong} phòng
                 </p>
               </div>
             </div>
@@ -1104,9 +1142,9 @@ export default function Bookings() {
                 </p>
               </div>
               <div>
-                <Label className="text-muted-foreground">Số khách</Label>
+                <Label className="text-muted-foreground">Số lượng phòng</Label>
                 <p className="text-lg font-semibold">
-                  {selectedBooking.SoKhach} người
+                  {selectedBooking.SoLuongPhong} phòng
                 </p>
               </div>
               <p className="text-sm text-muted-foreground">

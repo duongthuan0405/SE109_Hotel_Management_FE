@@ -121,7 +121,7 @@ export default function CustomerBooking() {
 
         // 1. Fetch Rooms
         const roomsData = await roomApi.getRooms();
-        setRooms(roomsData || []);
+        setRooms(roomsData.data || []);
 
         // 2. Fetch All Bookings (for availability check)
         const bookingsRes = await datPhongApi.getBookings();
