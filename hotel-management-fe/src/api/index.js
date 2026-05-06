@@ -18,7 +18,7 @@ export { default as bookingHistoryApi } from './bookingHistoryApi';
 export { default as serviceUsageHistoryApi } from './serviceUsageHistoryApi';
 export { default as datPhongApi } from './datPhongApi';
 export { default as roomTypeApi } from './roomTypeApi';
-export { default as notificationApi } from './notificationApi';
+export { default as notificationApi } from './notificationAPI';
 
 export { default as stripeApi } from './stripeApi';
 
