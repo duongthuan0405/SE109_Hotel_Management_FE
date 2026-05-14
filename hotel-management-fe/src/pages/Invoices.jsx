@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,9 @@ import {
 } from "@/api";
 
 export default function Invoices() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
   const loadCustomers = async () => {
     try {
       const data = await customerApi.getCustomers();
@@ -46,9 +50,6 @@ export default function Invoices() {
     }
   };
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isViewDetailOpen, setIsViewDetailOpen] = useState(false);
-  const [isPrintOpen, setIsPrintOpen] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -154,7 +155,7 @@ export default function Invoices() {
     console.log("Creating invoice with cleaned payload:", payload);
 
     try {
-      await invoiceApi.createInvoice(payload);
+      const res = await invoiceApi.createInvoice(payload);
       toast({
         title: "Thành công",
         description: "Hóa đơn mới đã được tạo và đánh dấu là Đã thanh toán",
@@ -172,7 +173,13 @@ export default function Invoices() {
         TrangThaiThanhToan: "Paid",
       });
       setIsCreateOpen(false);
-      loadInvoices();
+      
+      // Navigate to detailed page
+      if (res.success && res.data?._id) {
+        navigate(`/invoices/${res.data._id}`);
+      } else {
+        loadInvoices();
+      }
     } catch (error) {
       toast({
         title: "Lỗi",
@@ -200,37 +207,6 @@ export default function Invoices() {
     } catch (err) {
       console.error("Fetch preview error:", err);
       setFormData((prev) => ({ ...prev, PhieuThuePhong: phieuId }));
-    }
-  };
-
-  const handleViewDetail = async (invoice) => {
-    try {
-      const detail = await invoiceApi.getInvoiceById(invoice._id);
-      setSelectedInvoice(detail);
-      setIsViewDetailOpen(true);
-    } catch (error) {
-      toast({
-        title: "Lỗi",
-        description: error.message || "Không thể tải chi tiết hóa đơn",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handlePrint = (invoice) => {
-    setSelectedInvoice(invoice);
-    setIsPrintOpen(true);
-  };
-
-  const handleConfirmPrint = () => {
-    toast({
-      title: "Đang in",
-      description: "Hóa đơn đang được in...",
-    });
-    setIsPrintOpen(false);
-    // In a real application, this would trigger the browser's print dialog
-    if (window) {
-      window.print();
     }
   };
 
@@ -377,7 +353,7 @@ export default function Invoices() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Mã hóa đơn</TableHead>
-                  <TableHead>Phiếu thuê phòng</TableHead>
+                  <TableHead>Mã đặt phòng</TableHead>
                   <TableHead>Khách hàng</TableHead>
                   <TableHead>Ngày tạo</TableHead>
                   <TableHead>Tổng tiền</TableHead>
@@ -391,9 +367,9 @@ export default function Invoices() {
                   <TableRow key={invoice._id}>
                     <TableCell>{invoice.MaHD}</TableCell>
                     <TableCell>
-                      {invoice.PhieuThuePhong?.MaPTP || "N/A"}
+                      {invoice.DatPhong?.code || "N/A"}
                     </TableCell>
-                    <TableCell>{invoice.KhachHang?.HoTen || "N/A"}</TableCell>
+                    <TableCell>{invoice.KhachHang?.fullName || invoice.KhachHang?.HoTen || "N/A"}</TableCell>
                     <TableCell>
                       {invoice.createdAt
                         ? new Date(invoice.createdAt).toLocaleDateString(
@@ -408,14 +384,14 @@ export default function Invoices() {
                       {getPaymentStatusBadge(invoice.TrangThaiThanhToan)}
                     </TableCell>
                     <TableCell>
-                      {invoice.PhuongThucThanhToan?.TenPTTT || "N/A"}
+                      {invoice.PhuongThucThanhToan?.name || invoice.PhuongThucThanhToan?.TenPTTT || "N/A"}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleViewDetail(invoice)}
+                          onClick={() => navigate(`/invoices/${invoice._id}`)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -589,192 +565,8 @@ export default function Invoices() {
         </DialogContent>
       </Dialog>
 
-      {/* Popup chi tiết hđ */}
-      <Dialog open={isViewDetailOpen} onOpenChange={setIsViewDetailOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Chi tiết hóa đơn</DialogTitle>
-          </DialogHeader>
-          {selectedInvoice && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">Mã hóa đơn</Label>
-                  <p className="text-lg font-semibold">
-                    {selectedInvoice.MaHD}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Trạng thái</Label>
-                  <div className="mt-1">
-                    {getPaymentStatusBadge(selectedInvoice.TrangThaiThanhToan)}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">
-                    Phiếu thuê phòng
-                  </Label>
-                  <p className="text-lg font-semibold">
-                    {selectedInvoice.PhieuThuePhong?.MaPTP || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Khách hàng</Label>
-                  <p className="text-lg font-semibold">
-                    {selectedInvoice.KhachHang?.HoTen || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Ngày lập</Label>
-                  <p className="text-lg font-semibold">
-                    {selectedInvoice.createdAt
-                      ? new Date(selectedInvoice.createdAt).toLocaleDateString(
-                          "vi-VN"
-                        )
-                      : "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">
-                    Phương thức thanh toán
-                  </Label>
-                  <p className="text-lg font-semibold">
-                    {selectedInvoice.PhuongThucThanhToan?.TenPTTT || "N/A"}
-                  </p>
-                </div>
-              </div>
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tiền phòng:</span>
-                  <span className="font-semibold">
-                    {(selectedInvoice.TongTienPhong || 0).toLocaleString(
-                      "vi-VN"
-                    )}{" "}
-                    VNĐ
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tiền dịch vụ:</span>
-                  <span className="font-semibold">
-                    {(selectedInvoice.TongTienDichVu || 0).toLocaleString(
-                      "vi-VN"
-                    )}{" "}
-                    VNĐ
-                  </span>
-                </div>
-                {selectedInvoice.PhuThu > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Phụ thu:</span>
-                    <span className="font-semibold">
-                      +{(selectedInvoice.PhuThu || 0).toLocaleString("vi-VN")}{" "}
-                      VNĐ
-                    </span>
-                  </div>
-                )}
-                {selectedInvoice.TienBoiThuong > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Bồi thường:</span>
-                    <span className="font-semibold">
-                      -
-                      {(selectedInvoice.TienBoiThuong || 0).toLocaleString(
-                        "vi-VN"
-                      )}{" "}
-                      VNĐ
-                    </span>
-                  </div>
-                )}
-                {selectedInvoice.TienDaCoc > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Đã cọc:</span>
-                    <span className="font-semibold">
-                      -
-                      {(selectedInvoice.TienDaCoc || 0).toLocaleString("vi-VN")}{" "}
-                      VNĐ
-                    </span>
-                  </div>
-                )}
-                <div className="border-t pt-2 flex justify-between text-lg">
-                  <span className="font-semibold">Tổng cộng:</span>
-                  <span className="font-bold">
-                    {calculateTotal(selectedInvoice).toLocaleString("vi-VN")}{" "}
-                    VNĐ
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button onClick={() => setIsViewDetailOpen(false)}>Đóng</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Popup in hđ */}
-      <Dialog open={isPrintOpen} onOpenChange={setIsPrintOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Xem trước & In hóa đơn</DialogTitle>
-          </DialogHeader>
-          {selectedInvoice && (
-            <div className="border rounded-lg p-6 space-y-4">
-              <div className="text-center border-b pb-4">
-                <h3 className="text-xl font-bold">HÓA ĐƠN</h3>
-                <p className="text-sm text-muted-foreground">
-                  Hệ thống Quản lý Khách sạn
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Mã hóa đơn:</span>
-                  <span className="font-semibold">
-                    {selectedInvoice.MaHD ||
-                      selectedInvoice._id.substring(0, 8)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Ngày lập:</span>
-                  <span className="font-semibold">
-                    {selectedInvoice.createdAt
-                      ? new Date(selectedInvoice.createdAt).toLocaleDateString(
-                          "vi-VN"
-                        )
-                      : "N/A"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Khách hàng:</span>
-                  <span className="font-semibold">
-                    {selectedInvoice.KhachHang?.HoTen || "N/A"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Phiếu thuê phòng:
-                  </span>
-                  <span className="font-semibold">
-                    {selectedInvoice.PhieuThuePhong?.MaPTP || "N/A"}
-                  </span>
-                </div>
-              </div>
-              <div className="border-t pt-4">
-                <div className="flex justify-between text-lg">
-                  <span className="font-semibold">Tổng cộng:</span>
-                  <span className="font-bold">
-                    {calculateTotal(selectedInvoice).toLocaleString("vi-VN")}{" "}
-                    VNĐ
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPrintOpen(false)}>
-              Hủy
-            </Button>
-            <Button onClick={handleConfirmPrint}>In hóa đơn</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Popup in hđ gỡ bỏ */}
     </div>
   );
 }
+

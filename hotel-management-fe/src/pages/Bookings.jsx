@@ -30,9 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { bookingApi, roomApi, customerApi, rentalReceiptApi, roomTypeApi } from "@/api";
+import { bookingApi, roomApi, customerApi, rentalReceiptApi, roomTypeApi, invoiceApi, paymentMethodApi } from "@/api";
+import { useNavigate } from "react-router-dom";
 
 export default function Bookings() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -66,15 +68,22 @@ export default function Bookings() {
     TienCoc: 0,
     GhiChu: "",
   });
+  const [checkoutFormData, setCheckoutFormData] = useState({
+    PhuongThucThanhToan: "", // paymentMethodId
+    PhuThu: 0,
+    TienBoiThuong: 0,
+  });
   const [customers, setCustomers] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [roomTypes, setRoomTypes] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
 
   useEffect(() => {
     loadBookings();
     loadCustomers();
     loadRooms();
     loadRoomTypes();
+    loadPaymentMethods();
   }, []);
 
   const loadBookings = async () => {
@@ -117,6 +126,18 @@ export default function Bookings() {
       setRoomTypes(Array.isArray(data) ? data : data.data || []);
     } catch (error) {
       console.error("Error loading room types:", error);
+    }
+  };
+
+  const loadPaymentMethods = async () => {
+    try {
+      const data = await paymentMethodApi.getPaymentMethods();
+      setPaymentMethods(data.data || []);
+      if (data.data && data.data.length > 0) {
+        setCheckoutFormData(prev => ({ ...prev, PhuongThucThanhToan: data.data[0]._id }));
+      }
+    } catch (error) {
+      console.error("Error loading payment methods:", error);
     }
   };
 
@@ -288,7 +309,23 @@ export default function Bookings() {
     }
   };
 
-  const handleViewDetail = (booking) => {
+  const handleViewDetail = async (booking) => {
+    // Nếu đã trả phòng, ưu tiên xem hóa đơn
+    if (booking.TrangThai === "CheckedOut") {
+      try {
+        // Fetch đầy đủ thông tin booking để lấy danh sách invoice (nếu có)
+        const detail = await bookingApi.getBookingById(booking._id);
+        const invoiceId = detail.invoices?.[0]?._id || detail.data?.invoices?.[0]?._id;
+        
+        if (invoiceId) {
+          navigate("/invoices", { state: { openInvoiceId: invoiceId } });
+          return;
+        }
+      } catch (error) {
+        console.error("Error fetching booking details for invoice navigation:", error);
+      }
+    }
+    
     setSelectedBooking(booking);
     setIsViewDetailOpen(true);
   };
@@ -323,48 +360,9 @@ export default function Bookings() {
 
   const handleConfirmCheckIn = async () => {
     try {
-      let staffId = null;
-      try {
-        const staffRes = await fetch("http://localhost:5000/api/staff", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
-        if (staffRes.ok) {
-          const staffData = await staffRes.json();
-          const staffList = Array.isArray(staffData) ? staffData : (staffData.data || []);
-          if (staffList.length > 0) staffId = staffList[0]._id;
-        }
-      } catch (e) {
-        console.warn("Could not fetch staff", e);
-      }
-
-      const updateRes = await bookingApi.updateBooking(selectedBooking._id, {
-        TrangThai: "CheckedIn",
+      await rentalReceiptApi.createRentalReceipt({
+        DatPhong: selectedBooking._id,
       });
-
-      const updatedBooking = updateRes.data || updateRes;
-
-      const roomDetail = updatedBooking.ChiTietDatPhong?.[0];
-      if (roomDetail && staffId) {
-        const room = roomDetail.Phong;
-        const roomId = typeof room === 'object' ? room._id : room;
-        const roomPrice = typeof room === 'object' ? room.GiaPhong : 0;
-        
-        const roomTypePrices = { Normal: 400000, Standard: 600000, Premium: 900000, Luxury: 1500000 };
-        const finalPrice = roomPrice || roomTypePrices[updatedBooking.HangPhong] || 0;
-
-        await rentalReceiptApi.createRentalReceipt({
-          DatPhong: updatedBooking._id,
-          Phong: roomId,
-          NgayNhanPhong: new Date(updatedBooking.NgayDen),
-          NgayTraDuKien: new Date(updatedBooking.NgayDi),
-          SoKhachThucTe: updatedBooking.SoKhach || 1,
-          DonGiaSauDieuChinh: finalPrice,
-          NhanVienCheckIn: staffId,
-          TrangThai: "CheckedIn",
-        });
-      }
 
       toast({
         title: "Thành công",
@@ -388,15 +386,30 @@ export default function Bookings() {
 
   const handleConfirmCheckOut = async () => {
     try {
-      await bookingApi.updateBooking(selectedBooking._id, {
-        TrangThai: "CheckedOut",
+      const res = await invoiceApi.createCheckoutInvoice({
+        DatPhong: selectedBooking._id,
+        PhuongThucThanhToan: checkoutFormData.PhuongThucThanhToan,
+        PhuThu: Number(checkoutFormData.PhuThu) || 0,
+        TienBoiThuong: Number(checkoutFormData.TienBoiThuong) || 0,
       });
+
       toast({
         title: "Thành công",
-        description: "Đã trả phòng thành công",
+        description: "Đã thực hiện trả phòng thành công. Đang chuyển đến hóa đơn...",
       });
       setIsCheckOutOpen(false);
-      loadBookings();
+      setCheckoutFormData({
+        PhuongThucThanhToan: paymentMethods.length > 0 ? paymentMethods[0]._id : "",
+        PhuThu: 0,
+        TienBoiThuong: 0,
+      });
+      
+      // Chuyển hướng sang trang chi tiết hóa đơn mới
+      if (res.success && res.data?._id) {
+        navigate(`/invoices/${res.data._id}`);
+      } else {
+        loadBookings();
+      }
     } catch (error) {
       toast({
         title: "Lỗi",
@@ -1123,32 +1136,87 @@ export default function Bookings() {
 
       {/* PopUp checkout */}
       <Dialog open={isCheckOutOpen} onOpenChange={setIsCheckOutOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <DialogTitle>Trả phòng (Check-out)</DialogTitle>
           </DialogHeader>
           {selectedBooking && (
             <div className="grid gap-4 py-4">
-              <div>
-                <Label className="text-muted-foreground">Mã đặt phòng</Label>
-                <p className="text-lg font-semibold">
-                  {selectedBooking.MaDatPhong}
-                </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground">Mã đặt phòng</Label>
+                  <p className="font-semibold">{selectedBooking.MaDatPhong}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Khách hàng</Label>
+                  <p className="font-semibold">
+                    {selectedBooking.KhachHang?.HoTen || "N/A"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <Label className="text-muted-foreground">Hạng phòng</Label>
-                <p className="text-lg font-semibold">
-                  {getRoomTypeName(selectedBooking.HangPhong)}
-                </p>
+
+              <div className="space-y-4 border-t pt-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="paymentMethod">Phương thức thanh toán</Label>
+                  <Select
+                    value={checkoutFormData.PhuongThucThanhToan}
+                    onValueChange={(val) =>
+                      setCheckoutFormData({
+                        ...checkoutFormData,
+                        PhuongThucThanhToan: val,
+                      })
+                    }
+                  >
+                    <SelectTrigger id="paymentMethod">
+                      <SelectValue placeholder="Chọn phương thức" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {paymentMethods.map((pm) => (
+                        <SelectItem key={pm._id} value={pm._id}>
+                          {pm.TenPTTT}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="phuThu">Phụ thu (VNĐ)</Label>
+                    <Input
+                      id="phuThu"
+                      type="number"
+                      value={checkoutFormData.PhuThu}
+                      onChange={(e) =>
+                        setCheckoutFormData({
+                          ...checkoutFormData,
+                          PhuThu: e.target.value,
+                        })
+                      }
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="boiThuong">Bồi thường (VNĐ)</Label>
+                    <Input
+                      id="boiThuong"
+                      type="number"
+                      value={checkoutFormData.TienBoiThuong}
+                      onChange={(e) =>
+                        setCheckoutFormData({
+                          ...checkoutFormData,
+                          TienBoiThuong: e.target.value,
+                        })
+                      }
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label className="text-muted-foreground">Số lượng phòng</Label>
-                <p className="text-lg font-semibold">
-                  {selectedBooking.SoLuongPhong} phòng
-                </p>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Hệ thống sẽ tự động tạo hóa đơn sau khi check-out.
+
+              <p className="text-xs text-muted-foreground bg-muted p-2 rounded italic">
+                Lưu ý: Hệ thống sẽ tự động tính toán tiền phòng, tiền dịch vụ và
+                trừ tiền cọc để tạo hóa đơn cuối cùng.
               </p>
             </div>
           )}
@@ -1156,7 +1224,9 @@ export default function Bookings() {
             <Button variant="outline" onClick={() => setIsCheckOutOpen(false)}>
               Hủy
             </Button>
-            <Button onClick={handleConfirmCheckOut}>Xác nhận check-out</Button>
+            <Button onClick={handleConfirmCheckOut}>
+              Xác nhận thanh toán & Trả phòng
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

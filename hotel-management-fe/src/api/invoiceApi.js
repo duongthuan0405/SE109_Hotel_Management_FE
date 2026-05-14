@@ -125,4 +125,21 @@ export default {
       throw err;
     }
   },
+  confirmPayment: async (id, paymentData) => {
+    try {
+      const res = await fetch(`${API_URL}/${id}/confirm-payment`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(paymentData),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to confirm payment");
+      }
+      return await res.json();
+    } catch (err) {
+      console.error("Error confirming payment:", err);
+      throw err;
+    }
+  },
 };

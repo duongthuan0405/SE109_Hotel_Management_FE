@@ -87,11 +87,11 @@ export default function Rooms() {
   const [roomTypes, setRoomTypes] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterType, setFilterType] = useState("all");
   const [isAddRoomOpen, setIsAddRoomOpen] = useState(false);
   const [isViewDetailOpen, setIsViewDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isChangeStatusOpen, setIsChangeStatusOpen] = useState(false);
-  const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [techStaff, setTechStaff] = useState([]);
@@ -104,17 +104,25 @@ export default function Rooms() {
     GiaPhong: "",
     TrangThai: "Available",
   });
-  const [maintenanceData, setMaintenanceData] = useState({
-    MaPBT: "",
-    NVKyThuat: "",
-    NoiDung: "",
-  });
+
+
+  const [dynamicRoomTypes, setDynamicRoomTypes] = useState([]);
 
   useEffect(() => {
     loadRooms();
+    loadRoomTypes();
     fetchSettings();
     loadStaff();
   }, []);
+
+  const loadRoomTypes = async () => {
+    try {
+      const data = await roomTypeApi.getRoomTypes();
+      setDynamicRoomTypes(Array.isArray(data) ? data : data.data || []);
+    } catch (err) {
+      console.error("Error loading room types:", err);
+    }
+  };
 
   const loadStaff = async () => {
     try {
@@ -125,46 +133,7 @@ export default function Rooms() {
     }
   };
 
-  const handleOpenMaintenance = async (room) => {
-    setSelectedRoom(room);
-    setMaintenanceData({
-      MaPBT: "",
-      NVKyThuat: "",
-      NoiDung: "",
-    });
-    setIsMaintenanceOpen(true);
-    try {
-      const nextCode = await maintenanceApi.getNextMaPBTCode();
-      setMaintenanceData((prev) => ({ ...prev, MaPBT: nextCode }));
-    } catch (err) {
-      console.error("Error fetching next MaPBT:", err);
-    }
-  };
 
-  const handleSaveMaintenance = async () => {
-    if (!maintenanceData.NVKyThuat || !maintenanceData.NoiDung) {
-      toast({
-        title: "Thông tin không đủ",
-        description: "Vui lòng chọn nhân viên và nhập nội dung",
-        variant: "destructive",
-      });
-      return;
-    }
-    try {
-      await maintenanceApi.createMaintenanceRecord({
-        ...maintenanceData,
-        Phong: selectedRoom._id,
-      });
-      toast({
-        title: "Đã tạo phiếu bảo trì",
-        description: `Phòng ${selectedRoom.MaPhong} đang ở trạng thái Bảo trì`,
-      });
-      setIsMaintenanceOpen(false);
-      loadRooms();
-    } catch (err) {
-      toast({ title: "Lỗi", description: err.message, variant: "destructive" });
-    }
-  };
   function Slider(images) {
     const [index, setIndex] = useState(0);
 
@@ -376,6 +345,23 @@ export default function Rooms() {
     }
   };
 
+  const handleQuickComplete = async (room) => {
+    try {
+      await roomApi.changeRoomStatus(room._id, "Available");
+      toast({
+        title: "Thành công",
+        description: `Phòng ${room.MaPhong} đã sẵn sàng đón khách`,
+      });
+      loadRooms();
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể cập nhật trạng thái",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getStatusBadge = (status) => {
     const statusConfig = {
       Available: {
@@ -389,6 +375,10 @@ export default function Rooms() {
       Maintenance: {
         label: "Bảo trì",
         className: "bg-destructive text-destructive-foreground",
+      },
+      Cleaning: {
+        label: "Đang dọn dẹp",
+        className: "bg-info text-info-foreground",
       },
       Reserved: {
         label: "Đã đặt",
@@ -404,13 +394,14 @@ export default function Rooms() {
 
   const filteredRooms = rooms.filter((room) => {
     const matchesSearch =
-      room.LoaiPhong?.TenLoaiPhong &&
-      room.LoaiPhong.TenLoaiPhong.toLowerCase().includes(
-        searchTerm.toLowerCase()
-      );
+      room.MaPhong?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus =
       filterStatus === "all" || room.TrangThai === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesType =
+      filterType === "all" || 
+      room.LoaiPhong?._id === filterType || 
+      room.LoaiPhong === filterType;
+    return matchesSearch && matchesStatus && matchesType;
   });
 
   return (
@@ -426,6 +417,44 @@ export default function Rooms() {
           <Button onClick={() => setIsAddRoomOpen(true)}>Thêm phòng mới</Button>
         )}
       </div>
+
+      {/* Room Types Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Tổng quan loại phòng</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Loại phòng</TableHead>
+                <TableHead className="text-center">Tổng số</TableHead>
+                <TableHead className="text-center">Trống</TableHead>
+                <TableHead className="text-center">Dọn dẹp</TableHead>
+                <TableHead className="text-center">Bảo trì</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {dynamicRoomTypes.map((type) => {
+                const typeRooms = rooms.filter(r => 
+                  r.LoaiPhong?._id === type._id || 
+                  r.LoaiPhong === type._id || 
+                  r.LoaiPhong?.TenLoaiPhong === type.TenLoaiPhong
+                );
+                return (
+                  <TableRow key={type._id}>
+                    <TableCell className="font-medium">{type.TenLoaiPhong}</TableCell>
+                    <TableCell className="text-center">{typeRooms.length}</TableCell>
+                    <TableCell className="text-center">{typeRooms.filter(r => r.TrangThai === "Available").length}</TableCell>
+                    <TableCell className="text-center">{typeRooms.filter(r => r.TrangThai === "Cleaning").length}</TableCell>
+                    <TableCell className="text-center">{typeRooms.filter(r => r.TrangThai === "Maintenance").length}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {/* Các thẻ */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -478,6 +507,18 @@ export default function Rooms() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
+              Dọn dẹp
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {rooms.filter((r) => r.TrangThai === "Cleaning").length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               Bảo trì
             </CardTitle>
           </CardHeader>
@@ -502,12 +543,25 @@ export default function Rooms() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Tìm kiếm theo loại phòng..."
+                placeholder="Tìm kiếm theo mã phòng..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
               />
             </div>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Tất cả loại phòng" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả loại phòng</SelectItem>
+                {dynamicRoomTypes.map((type) => (
+                  <SelectItem key={type._id} value={type._id}>
+                    {type.TenLoaiPhong}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Trạng thái" />
@@ -517,6 +571,7 @@ export default function Rooms() {
                 <SelectItem value="Available">Trống</SelectItem>
                 <SelectItem value="Reserved">Đã đặt</SelectItem>
                 <SelectItem value="Occupied">Đang sử dụng</SelectItem>
+                <SelectItem value="Cleaning">Dọn dẹp</SelectItem>
                 <SelectItem value="Maintenance">Bảo trì</SelectItem>
               </SelectContent>
             </Select>
@@ -559,7 +614,17 @@ export default function Rooms() {
                     </TableCell>
                     <TableCell>{getStatusBadge(room.TrangThai)}</TableCell>
                     <TableCell className="text-right">
-                      <DropdownMenu>
+                          {(room.TrangThai === "Cleaning" ||
+                            room.TrangThai === "Maintenance") && (
+                            <Button
+                              size="sm"
+                              className="mr-2 h-8 bg-success hover:bg-success/90"
+                              onClick={() => handleQuickComplete(room)}
+                            >
+                              Xong
+                            </Button>
+                          )}
+                          <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
                             <MoreVertical className="h-4 w-4" />
@@ -580,7 +645,7 @@ export default function Rooms() {
                             Bảo trì
                           </DropdownMenuItem>
 
-                          {(userRole === "Admin" || userRole === "Manager") && (
+                          {(userRole === "Admin" || userRole === "Manager" || userRole === "Receptionist" || userRole === "MaintenanceStaff") && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -675,6 +740,7 @@ export default function Rooms() {
                   <SelectItem value="Available">Trống</SelectItem>
                   <SelectItem value="Reserved">Đã đặt</SelectItem>
                   <SelectItem value="Occupied">Đang sử dụng</SelectItem>
+                  <SelectItem value="Cleaning">Dọn dẹp</SelectItem>
                   <SelectItem value="Maintenance">Bảo trì</SelectItem>
                 </SelectContent>
               </Select>
@@ -891,83 +957,7 @@ export default function Rooms() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Popup bảo trì phòng */}
-      <Dialog open={isMaintenanceOpen} onOpenChange={setIsMaintenanceOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Tạo phiếu bảo trì mới</DialogTitle>
-          </DialogHeader>
-          {selectedRoom && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Phòng</Label>
-                <div className="col-span-3 font-semibold">
-                  {selectedRoom.MaPhong}
-                </div>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="maint-code" className="text-right">
-                  Mã phiếu
-                </Label>
-                <Input
-                  id="maint-code"
-                  value={maintenanceData.MaPBT}
-                  readOnly
-                  className="col-span-3 bg-muted"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="maint-staff" className="text-right">
-                  Kỹ thuật
-                </Label>
-                <Select
-                  value={maintenanceData.NVKyThuat}
-                  onValueChange={(v) =>
-                    setMaintenanceData({ ...maintenanceData, NVKyThuat: v })
-                  }
-                >
-                  <SelectTrigger id="maint-staff" className="col-span-3">
-                    <SelectValue placeholder="Chọn nhân viên" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {techStaff.map((s) => (
-                      <SelectItem key={s._id} value={s._id}>
-                        {s.HoTen}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="maint-content" className="text-right">
-                  Nội dung
-                </Label>
-                <Textarea
-                  id="maint-content"
-                  value={maintenanceData.NoiDung}
-                  onChange={(e) =>
-                    setMaintenanceData({
-                      ...maintenanceData,
-                      NoiDung: e.target.value,
-                    })
-                  }
-                  className="col-span-3"
-                  placeholder="Chi tiết sự cố..."
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsMaintenanceOpen(false)}
-            >
-              Hủy
-            </Button>
-            <Button onClick={handleSaveMaintenance}>Xác nhận bảo trì</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
     </div>
   );
 }

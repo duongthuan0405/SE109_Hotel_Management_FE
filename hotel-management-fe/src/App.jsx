@@ -22,6 +22,7 @@ import Rooms from "./pages/Rooms";
 import Bookings from "./pages/Bookings";
 import Guests from "./pages/Guests";
 import Invoices from "./pages/Invoices";
+import InvoiceDetail from "./pages/InvoiceDetail";
 import Services from "./pages/Services";
 import Staff from "./pages/Staff";
 import Settings from "./pages/Settings";
@@ -29,6 +30,7 @@ import Reports from "./pages/Reports";
 import Profile from "./pages/Profile";
 import Maintenance from "./pages/Maintenance";
 import Calendar from "./pages/Calendar";
+import ServiceRequests from "./pages/ServiceRequests";
 
 
 // Customer pages
@@ -103,7 +105,7 @@ const App = () => (
           <Route
             path="/rooms"
             element={
-              <ProtectedRoute allowRoles={["Admin", "Manager", "MaintenanceStaff"]}>
+              <ProtectedRoute allowRoles={["Admin", "Manager", "MaintenanceStaff", "Receptionist"]}>
                 <AppLayout>
                   <Rooms />
                 </AppLayout>
@@ -154,6 +156,30 @@ const App = () => (
               <ProtectedRoute allowRoles={["Admin", "Manager", "Receptionist"]}>
                 <AppLayout>
                   <Invoices />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+
+          <Route
+            path="/invoices/:id"
+            element={
+              <ProtectedRoute allowRoles={["Admin", "Manager", "Receptionist"]}>
+                <AppLayout>
+                  <InvoiceDetail />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+
+          <Route
+            path="/service-requests"
+            element={
+              <ProtectedRoute allowRoles={["Admin", "Staff", "Receptionist"]}>
+                <AppLayout>
+                  <ServiceRequests />
                 </AppLayout>
               </ProtectedRoute>
             }
