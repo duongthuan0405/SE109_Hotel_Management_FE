@@ -6,26 +6,15 @@ import {
   Bed,
   CalendarDays,
   ConciergeBell,
-  CreditCard,
   ArrowRight,
-  Loader2
+  Loader2,
+  CreditCard
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { datPhongApi, customerApi, serviceUsageApi, rentalReceiptApi } from "@/api";
+import { datPhongApi, customerApi, serviceUsageApi } from "@/api";
 import { toast } from "@/hooks/use-toast";
 import Notifications from "@/components/Notification";
 import MaintenanceRequest from "@/components/MaintainanceRequest";
-
-
-// Helper to decode JWT
-const parseJwt = (token) => {
-  try {
-    return JSON.parse(atob(token.split('.')[1]));
-  } catch (e) {
-    return null;
-  }
-};
-
 
 export default function CustomerDashboard() {
   const navigate = useNavigate();
@@ -34,91 +23,48 @@ export default function CustomerDashboard() {
   const [bookings, setBookings] = useState([]);
   const [requests, setRequests] = useState([]);
 
-
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const token = localStorage.getItem('token');
-        if (!token) {
-          navigate("/login");
-          return;
-        }
+        
+        // 1. Lấy thông tin cá nhân (dùng Token)
+        const profileRes = await customerApi.getMyProfile();
+        const profile = profileRes.data || profileRes;
+        
+        if (profile) {
+          setCustomer(profile);
+          localStorage.setItem("customerId", profile._id);
+          localStorage.setItem("customerName", profile.HoTen);
 
-
-        const decoded = parseJwt(token);
-        if (!decoded?.id) return;
-
-
-        // 1. Get Customer Info
-        const customers = await customerApi.getCustomers();
-        const foundCustomer = customers.data.find(c => {
-          if (!c.TaiKhoan) return false;
-          const taiKhoanId = typeof c.TaiKhoan === 'object' ? c.TaiKhoan._id : c.TaiKhoan;
-          return taiKhoanId === decoded.id;
-        });
-
-
-        if (foundCustomer) {
-          setCustomer(foundCustomer);
-          localStorage.setItem("customerId", foundCustomer._id);
-          localStorage.setItem("customerName", foundCustomer.HoTen);
-
-
-          // 2. Get Bookings
-          const bookingsRes = await datPhongApi.getBookingsByCustomerId(foundCustomer._id);
-          const bookingsData = bookingsRes.data || bookingsRes || [];
+          // 2. Lấy danh sách đặt phòng (dùng Token)
+          const bookingsRes = await datPhongApi.getBookings();
+          const bookingsData = bookingsRes.data || [];
           setBookings(bookingsData);
 
-
-          // 3. Get Service Requests (complex filtering)
-          // Fetch all usages
-          const allUsagesRes = await serviceUsageApi.getServiceUsages();
-          const allUsages = allUsagesRes.data || allUsagesRes || [];
-
-
-          // Fetch all rental receipts to map to bookings
-          const ptpsRes = await rentalReceiptApi.getRentalReceipts();
-          const ptps = Array.isArray(ptpsRes) ? ptpsRes : (ptpsRes.data || []);
-
-
-          const customerBookingIds = bookingsData.map(b => b._id);
-
-
-          // Filter usages belonging to customer's bookings
-          const customerUsages = allUsages.filter(usage => {
-            // Find usage's PTP
-            // Usage connects to PTP, PTP connects to DatPhong
-            const ptpId = typeof usage.PhieuThuePhong === 'object' ? usage.PhieuThuePhong._id : usage.PhieuThuePhong;
-            const ptp = ptps.find(p => p._id === ptpId);
-            if (!ptp) return false;
-
-
-            const bookingId = typeof ptp.DatPhong === 'object' ? ptp.DatPhong._id : ptp.DatPhong;
-            return customerBookingIds.includes(bookingId);
-          });
-
-
-          setRequests(customerUsages);
+          // 3. Lấy danh sách dịch vụ đã đặt (dùng Token)
+          const requestsRes = await serviceUsageApi.getMyServiceUsages();
+          const requestsData = requestsRes.data || [];
+          setRequests(requestsData);
         }
-
-
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải thông tin tổng quan. Vui lòng kiểm tra lại kết nối.",
+          variant: "destructive"
+        });
       } finally {
         setLoading(false);
       }
     };
 
-
     fetchData();
-  }, [navigate]);
-
+  }, []);
 
   const pendingBookings = bookings.filter(b => b.TrangThai === "Pending").length;
   const activeBookings = bookings.filter(b => ["DepositPaid", "Confirmed", "CheckedIn"].includes(b.TrangThai)).length;
   const pendingRequests = requests.filter(r => r.TrangThai === "Pending").length;
-
 
   const getStatusBadge = (status) => {
     const statusMap = {
@@ -135,78 +81,56 @@ export default function CustomerDashboard() {
     return <Badge variant={info.variant} className={info.className}>{info.label}</Badge>;
   };
 
-
   const formatDate = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString('vi-VN');
   };
 
-
   if (loading) {
-    return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">
+        <h1 className="text-3xl font-bold tracking-tight">
           Xin chào, {customer ? customer.HoTen : "Khách hàng"}!
         </h1>
         <p className="text-muted-foreground">
-          Chào mừng bạn đến với cổng thông tin khách hàng
+          Chào mừng bạn quay trở lại cổng thông tin khách hàng.
         </p>
       </div>
 
-
-      {/* Thống kê nhanh */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-shadow"
-          onClick={() => navigate("/customer/my-bookings")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Đặt phòng đang chờ
-            </CardTitle>
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate("/customer/my-bookings")}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Chờ xác nhận</CardTitle>
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{pendingBookings}</div>
-            <p className="text-xs text-muted-foreground">
-              Chờ xác nhận từ khách sạn
-            </p>
+            <p className="text-xs text-muted-foreground">Đơn đặt phòng mới</p>
           </CardContent>
         </Card>
 
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-shadow"
-          onClick={() => navigate("/customer/my-bookings")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Đặt phòng hiện tại
-            </CardTitle>
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate("/customer/my-bookings")}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Đang lưu trú</CardTitle>
             <Bed className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{activeBookings}</div>
-            <p className="text-xs text-muted-foreground">
-              Đã xác nhận hoặc đang lưu trú
-            </p>
+            <p className="text-xs text-muted-foreground">Phòng đang sử dụng</p>
           </CardContent>
         </Card>
 
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-shadow"
-          onClick={() => navigate("/customer/services")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Yêu cầu dịch vụ
-            </CardTitle>
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate("/customer/services")}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Yêu cầu dịch vụ</CardTitle>
             <ConciergeBell className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -215,54 +139,38 @@ export default function CustomerDashboard() {
           </CardContent>
         </Card>
 
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-shadow"
-          onClick={() => navigate("/customer/payment")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate("/customer/payment")}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Thanh toán</CardTitle>
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Xem ngay</div>
-            <p className="text-xs text-muted-foreground">Quản lý thanh toán</p>
+            <div className="text-2xl font-bold">Xem hóa đơn</div>
+            <p className="text-xs text-muted-foreground">Quản lý tài chính</p>
           </CardContent>
         </Card>
       </div>
-
 
       <div className="grid gap-6 md:grid-cols-2">
         <Notifications />
         <MaintenanceRequest />
       </div>
 
-
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Recent Bookings */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Đặt phòng gần đây</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/customer/my-bookings")}
-            >
-              Xem tất cả <ArrowRight className="ml-1 h-4 w-4" />
+            <Button variant="ghost" size="sm" onClick={() => navigate("/customer/my-bookings")}>
+              Tất cả <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardHeader>
           <CardContent>
             {bookings.length > 0 ? (
               <div className="space-y-4">
                 {bookings.slice(0, 3).map((booking) => (
-                  <div
-                    key={booking._id}
-                    className="flex items-center justify-between border-b pb-3 last:border-0"
-                  >
+                  <div key={booking._id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium">
-                        Phòng {booking.HangPhong}
-                      </p>
+                      <p className="text-sm font-medium">Phòng {booking.HangPhong}</p>
                       <p className="text-xs text-muted-foreground">
                         {formatDate(booking.NgayDen)} - {formatDate(booking.NgayDi)}
                       </p>
@@ -272,113 +180,67 @@ export default function CustomerDashboard() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>Chưa có đặt phòng nào</p>
-                <Button
-                  className="mt-4"
-                  onClick={() => navigate("/customer/booking")}
-                >
-                  Đặt phòng ngay
-                </Button>
+              <div className="flex flex-col items-center py-6 text-center text-muted-foreground">
+                <p className="text-sm">Bạn chưa có đơn đặt phòng nào.</p>
+                <Button variant="link" onClick={() => navigate("/customer/booking")}>Đặt phòng ngay</Button>
               </div>
             )}
           </CardContent>
         </Card>
 
-
-        {/* Recent Service Requests */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Yêu cầu dịch vụ gần đây</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/customer/services")}
-            >
-              Xem tất cả <ArrowRight className="ml-1 h-4 w-4" />
+            <CardTitle>Dịch vụ gần đây</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/customer/services")}>
+              Tất cả <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardHeader>
           <CardContent>
             {requests.length > 0 ? (
               <div className="space-y-4">
                 {requests.slice(0, 3).map((request) => (
-                  <div
-                    key={request._id}
-                    className="flex items-center justify-between border-b pb-3 last:border-0"
-                  >
+                  <div key={request._id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium">
-                        {request.DichVu?.TenDV || "Dịch vụ"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        SL: {request.SoLuong}
-                      </p>
+                      <p className="text-sm font-medium">{request.DichVu?.TenDV || "Dịch vụ"}</p>
+                      <p className="text-xs text-muted-foreground">Số lượng: {request.SoLuong}</p>
                     </div>
-                    <Badge variant={request.TrangThai === "Pending" ? "outline" : "secondary"}>
-                      {request.TrangThai}
-                    </Badge>
+                    <Badge variant="secondary">{request.TrangThai}</Badge>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>Chưa có yêu cầu dịch vụ nào</p>
-                <Button
-                  className="mt-4"
-                  variant="outline"
-                  onClick={() => navigate("/customer/services")}
-                >
-                  Yêu cầu dịch vụ
-                </Button>
+              <div className="flex flex-col items-center py-6 text-center text-muted-foreground">
+                <p className="text-sm">Bạn chưa yêu cầu dịch vụ nào.</p>
+                <Button variant="link" onClick={() => navigate("/customer/services")}>Đặt dịch vụ</Button>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-
-      {/* Quick Actions */}
       <Card>
         <CardHeader>
           <CardTitle>Thao tác nhanh</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-4">
-          <Button
-            className="h-auto py-6 flex-col gap-2"
-            onClick={() => navigate("/customer/booking")}
-          >
+        <CardContent className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+          <Button className="h-auto py-6 flex-col gap-2" onClick={() => navigate("/customer/booking")}>
             <Bed className="h-6 w-6" />
             <span>Đặt phòng mới</span>
           </Button>
-          <Button
-            variant="outline"
-            className="h-auto py-6 flex-col gap-2"
-            onClick={() => navigate("/customer/services")}
-          >
+          <Button variant="outline" className="h-auto py-6 flex-col gap-2" onClick={() => navigate("/customer/services")}>
             <ConciergeBell className="h-6 w-6" />
             <span>Yêu cầu dịch vụ</span>
           </Button>
-          <Button
-            variant="outline"
-            className="h-auto py-6 flex-col gap-2"
-            onClick={() => navigate("/customer/payment")}
-          >
+          <Button variant="outline" className="h-auto py-6 flex-col gap-2" onClick={() => navigate("/customer/payment")}>
             <CreditCard className="h-6 w-6" />
-            <span>Thanh toán</span>
+            <span>Xem hóa đơn</span>
           </Button>
-          <Button
-            variant="outline"
-            className="h-auto py-6 flex-col gap-2"
-            onClick={() => navigate("/customer/history")}
-          >
+          <Button variant="outline" className="h-auto py-6 flex-col gap-2" onClick={() => navigate("/customer/history")}>
             <CalendarDays className="h-6 w-6" />
-            <span>Xem lịch sử</span>
+            <span>Lịch sử đặt</span>
           </Button>
         </CardContent>
       </Card>
     </div>
   );
 }
-
-
-

@@ -21,6 +21,22 @@ const getInvoices = async () => {
   }
 };
 
+/**
+ * Lấy tất cả hóa đơn của khách hàng hiện tại (dựa trên Token)
+ */
+const getMyInvoices = async () => {
+  try {
+    const res = await fetch(`${API_URL}/me`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to fetch my invoices");
+    return await res.json();
+  } catch (err) {
+    console.error("Error fetching my invoices:", err);
+    throw err;
+  }
+};
+
 const getInvoiceById = async (id) => {
   try {
     const res = await fetch(`${API_URL}/${id}`, {
@@ -89,6 +105,7 @@ const deleteInvoice = async (id) => {
 
 export default {
   getInvoices,
+  getMyInvoices,
   getInvoiceById,
   createInvoice,
   updateInvoice,
@@ -122,6 +139,23 @@ export default {
       return await res.json();
     } catch (err) {
       console.error("Error creating checkout invoice:", err);
+      throw err;
+    }
+  },
+  confirmPayment: async (id, paymentData) => {
+    try {
+      const res = await fetch(`${API_URL}/${id}/confirm-payment`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(paymentData),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to confirm payment");
+      }
+      return await res.json();
+    } catch (err) {
+      console.error("Error confirming payment:", err);
       throw err;
     }
   },

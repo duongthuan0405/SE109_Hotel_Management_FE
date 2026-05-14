@@ -21,6 +21,43 @@ const getServiceUsages = async () => {
   }
 };
 
+/**
+ * Lấy lịch sử sử dụng dịch vụ của khách hàng hiện tại (dựa trên Token)
+ */
+const getMyServiceUsages = async () => {
+  try {
+    const res = await fetch(`${API_URL}/me`, {
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error('Failed to fetch my service usages');
+    return await res.json();
+  } catch (err) {
+    console.error('Error fetching my service usages:', err);
+    throw err;
+  }
+};
+
+/**
+ * Khách hàng tự đặt dịch vụ (dựa trên Token)
+ */
+const customerOrderService = async (data) => {
+  try {
+    const res = await fetch(`${API_URL}/customer/order`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Failed to order service');
+    }
+    return await res.json();
+  } catch (err) {
+    console.error('Error ordering service:', err);
+    throw err;
+  }
+};
+
 const getServiceUsagesByCustomerId = async (customerId) => {
   try {
     const res = await fetch(`${API_URL}/customer/${customerId}`, {
@@ -99,6 +136,8 @@ const deleteServiceUsage = async (id) => {
 
 export default {
   getServiceUsages,
+  getMyServiceUsages,
+  customerOrderService,
   getServiceUsagesByCustomerId,
   getServiceUsageById,
   createServiceUsage,

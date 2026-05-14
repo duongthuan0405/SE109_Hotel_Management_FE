@@ -21,6 +21,43 @@ const getCustomers = async () => {
   }
 };
 
+/**
+ * Lấy thông tin cá nhân của khách hàng hiện tại (dựa trên Token)
+ */
+const getMyProfile = async () => {
+  try {
+    const res = await fetch(`${API_URL}/me`, {
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error('Failed to fetch profile');
+    return await res.json();
+  } catch (err) {
+    console.error('Error fetching profile:', err);
+    throw err;
+  }
+};
+
+/**
+ * Cập nhật thông tin cá nhân của khách hàng hiện tại (dựa trên Token)
+ */
+const updateMyProfile = async (data) => {
+  try {
+    const res = await fetch(`${API_URL}/me`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Failed to update profile');
+    }
+    return await res.json();
+  } catch (err) {
+    console.error('Error updating profile:', err);
+    throw err;
+  }
+};
+
 const getCustomerById = async (id) => {
   try {
     const res = await fetch(`${API_URL}/${id}`, {
@@ -102,6 +139,8 @@ const deleteCustomer = async (id) => {
 
 export default {
   getCustomers,
+  getMyProfile,
+  updateMyProfile,
   getCustomerById,
   getCustomerByMaKH,
   createCustomer,

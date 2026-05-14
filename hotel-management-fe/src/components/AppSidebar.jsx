@@ -37,7 +37,7 @@ const menuItems = [
     title: "Phòng",
     url: "/rooms",
     icon: Bed,
-    roles: ["Admin", "Manager", "MaintenanceStaff"],
+    roles: ["Admin", "Manager", "MaintenanceStaff", "Receptionist"],
   },
   {
     title: "Đặt phòng",
@@ -68,6 +68,12 @@ const menuItems = [
     url: "/services",
     icon: Utensils,
     roles: ["Admin", "Manager"],
+  },
+  {
+    title: "Duyệt dịch vụ",
+    url: "/service-requests",
+    icon: Calendar,
+    roles: ["Admin", "Staff", "Receptionist"],
   },
   {
     title: "Bảo trì",
