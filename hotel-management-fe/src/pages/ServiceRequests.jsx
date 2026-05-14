@@ -227,10 +227,7 @@ export default function ServiceRequests() {
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <Home className="h-3 w-3" /> Phòng: <span className="font-semibold text-foreground">{group.roomCode}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Package className="h-3 w-3" /> Tổng: <span className="font-semibold text-foreground">{group.requests.length} hạng mục</span>
+                          <Package className="h-3 w-3" /> Tổng: <span className="font-semibold text-foreground">{group.requests.length} hạng mục yêu cầu</span>
                         </div>
                       </div>
                     </div>

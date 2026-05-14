@@ -21,6 +21,7 @@ export { default as roomTypeApi } from './roomTypeApi';
 export { default as notificationApi } from './notificationAPI';
 
 export { default as stripeApi } from './stripeApi';
+export { default as momoApi } from './momoApi';
 
 // Export utility functions
 export {

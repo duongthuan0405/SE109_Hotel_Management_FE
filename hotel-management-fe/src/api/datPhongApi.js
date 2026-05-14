@@ -8,9 +8,12 @@ const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`
 });
 
+/**
+ * Lấy tất cả đặt phòng của khách hàng hiện tại (dựa trên Token)
+ */
 const getBookings = async () => {
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(`${API_URL}/`, {
       headers: getHeaders()
     });
     if (!res.ok) throw new Error('Failed to fetch bookings');
@@ -34,22 +37,9 @@ const getBookingById = async (id) => {
   }
 };
 
-const getBookingsByCustomerId = async (customerId) => {
-  try {
-    const res = await fetch(`${API_URL}/customer/${customerId}`, {
-      headers: getHeaders()
-    });
-    if (!res.ok) throw new Error('Failed to fetch customer bookings');
-    return await res.json().data;
-  } catch (err) {
-    console.error('Error fetching customer bookings:', err);
-    throw err;
-  }
-};
-
 const createBooking = async (data) => {
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(`${API_URL}/`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data)
@@ -114,7 +104,6 @@ const deleteBooking = async (id) => {
 export default {
   getBookings,
   getBookingById,
-  getBookingsByCustomerId,
   createBooking,
   updateBooking,
   cancelBooking,

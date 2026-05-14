@@ -7,27 +7,19 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { CreditCard, Banknote, Smartphone, CheckCircle, Loader2, FileText, Clock } from "lucide-react";
-import { customerApi, datPhongApi, invoiceApi } from "@/api";
-
-// Helper to decode JWT
-const parseJwt = (token) => {
-  try {
-    return JSON.parse(atob(token.split('.')[1]));
-  } catch (e) {
-    return null;
-  }
-};
+import { CreditCard, CheckCircle, Loader2, FileText, Clock, Wallet } from "lucide-react";
+import { datPhongApi, invoiceApi, momoApi } from "@/api";
 
 const paymentMethods = [
-  { id: "banking", name: "Chuyển khoản ngân hàng" },
-  { id: "cash", name: "Tiền mặt tại quầy" },
+  { id: "momo", name: "Ví điện tử MoMo", icon: Wallet },
+  { id: "banking", name: "Chuyển khoản ngân hàng", icon: CreditCard },
+  { id: "cash", name: "Tiền mặt tại quầy", icon: Wallet },
 ];
 
 export default function CustomerPayment() {
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState("banking");
+  const [paymentMethod, setPaymentMethod] = useState("momo");
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -37,37 +29,19 @@ export default function CustomerPayment() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        const decoded = parseJwt(token);
-        if (!decoded?.id) return;
 
-        // 1. Get Customer to know ID
-        const customers = await customerApi.getCustomers();
-        const customer = customers.find(c => {
-          if (!c.TaiKhoan) return false;
-          const taiKhoanId = typeof c.TaiKhoan === 'object' ? c.TaiKhoan._id : c.TaiKhoan;
-          return taiKhoanId === decoded.id;
-        });
+        // 1. Lấy danh sách đặt phòng (Token)
+        const bookingRes = await datPhongApi.getBookings();
+        setBookings(bookingRes.data || []);
 
-        if (customer) {
-          // 2. Fetch Bookings
-          const bookingRes = await datPhongApi.getBookingsByCustomerId(customer._id);
-          setBookings(bookingRes.data || bookingRes || []);
-
-          // 3. Fetch Invoices (and filter by customer)
-          try {
-            const invoiceRes = await invoiceApi.getInvoices();
-            const allInvoices = invoiceRes.data || invoiceRes || [];
-            const myInvoices = allInvoices.filter(inv => {
-              const invCustId = typeof inv.KhachHang === 'object' ? inv.KhachHang._id : inv.KhachHang;
-              return invCustId === customer._id;
-            });
-            setInvoices(myInvoices);
-          } catch (invErr) {
-            console.error("Error fetching invoices:", invErr);
-          }
+        // 2. Lấy danh sách hóa đơn cá nhân (Token)
+        try {
+          const invoiceRes = await invoiceApi.getMyInvoices();
+          setInvoices(invoiceRes.data || []);
+        } catch (invErr) {
+          console.error("Error fetching invoices:", invErr);
         }
+        
       } catch (error) {
         console.error("Error fetching payment data:", error);
         toast({
@@ -95,17 +69,33 @@ export default function CustomerPayment() {
 
     try {
       setActionLoading(true);
-      // Simulate payment processing
+      // Nếu chọn MoMo thì thực hiện luồng thanh toán thật
+      if (paymentMethod === "momo") {
+        const payload = {
+          HangPhong: selectedBooking.HangPhong,
+          NgayDen: selectedBooking.NgayDen,
+          NgayDi: selectedBooking.NgayDi,
+          SoLuongPhong: selectedBooking.SoLuongPhong || 1,
+          TienCoc: selectedBooking.TienCoc,
+        };
+        const { payUrl } = await momoApi.createPayment(payload);
+        if (payUrl) {
+          window.location.href = payUrl;
+          return;
+        }
+      }
+
+      // Giả lập luồng thanh toán đặt cọc cho các phương thức khác
       await datPhongApi.updateBooking(selectedBooking._id, {
         TrangThai: 'Confirmed'
       });
 
       toast({
-        title: "Thanh toán thành công",
-        description: "Đã xác nhận đặt cọc. Đặt phòng của bạn đã được xác nhận.",
+        title: "Xác nhận thành công",
+        description: "Yêu cầu thanh toán của bạn đang được hệ thống kiểm tra.",
       });
 
-      // Update local state
+      // Cập nhật state cục bộ
       setBookings(prev => prev.map(b =>
         b._id === selectedBooking._id ? { ...b, TrangThai: 'Confirmed' } : b
       ));
@@ -118,159 +108,176 @@ export default function CustomerPayment() {
     }
   };
 
-  if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
+  if (loading) return (
+    <div className="flex h-64 items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Thanh toán</h1>
-        <p className="text-muted-foreground">Quản lý thanh toán và hóa đơn</p>
+        <h1 className="text-3xl font-bold tracking-tight">Thanh toán & Hóa đơn</h1>
+        <p className="text-muted-foreground">Quản lý các khoản đặt cọc và xem lịch sử hóa đơn của bạn</p>
       </div>
 
-      <Tabs defaultValue="deposit">
-        <TabsList>
+      <Tabs defaultValue="deposit" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
           <TabsTrigger value="deposit" className="gap-2">
-            <Clock className="h-4 w-4" /> Đặt cọc ({unpaidBookings.length})
+            <Clock className="h-4 w-4" /> Cần đặt cọc ({unpaidBookings.length})
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
-            <CreditCard className="h-4 w-4" /> Đã thanh toán ({paidBookings.length})
+            <CheckCircle className="h-4 w-4" /> Đã cọc ({paidBookings.length})
           </TabsTrigger>
           <TabsTrigger value="invoices" className="gap-2">
             <FileText className="h-4 w-4" /> Hóa đơn ({invoices.length})
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab Đặt cọc */}
         <TabsContent value="deposit" className="mt-6 space-y-4">
           {unpaidBookings.length > 0 ? (
             unpaidBookings.map(booking => (
-              <Card key={booking._id}>
-                <CardContent className="p-6 flex justify-between items-center">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
+              <Card key={booking._id} className="overflow-hidden border-l-4 border-l-yellow-500">
+                <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="space-y-1 w-full md:w-auto">
+                    <div className="flex items-center gap-2">
                       <span className="font-bold text-lg">Phòng {booking.HangPhong}</span>
                       <Badge variant="outline">{booking.MaDatPhong}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(booking.NgayDen).toLocaleDateString('vi-VN')} - {new Date(booking.NgayDi).toLocaleDateString('vi-VN')}
+                      Lưu trú: {new Date(booking.NgayDen).toLocaleDateString('vi-VN')} - {new Date(booking.NgayDi).toLocaleDateString('vi-VN')}
                     </p>
-                    <p className="mt-2">
-                      Cần đặt cọc: <strong className="text-destructive text-lg">{booking.TienCoc?.toLocaleString()} VNĐ</strong>
-                    </p>
+                    <div className="pt-2">
+                      <p className="text-sm text-muted-foreground">Số tiền cần đặt cọc:</p>
+                      <p className="font-bold text-2xl text-destructive">{booking.TienCoc?.toLocaleString()} VNĐ</p>
+                    </div>
                   </div>
-                  <Button onClick={() => handlePayClick(booking)}>Thanh toán ngay</Button>
+                  <Button size="lg" onClick={() => handlePayClick(booking)} className="w-full md:w-auto">Thanh toán ngay</Button>
                 </CardContent>
               </Card>
             ))
           ) : (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">Không có khoản đặt cọc nào cần thanh toán</CardContent></Card>
+            <Card className="bg-muted/50 border-dashed">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>Hiện không có khoản đặt cọc nào cần thanh toán.</p>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
-        {/* Tab Lịch sử (Deposits Paid) */}
         <TabsContent value="history" className="mt-6 space-y-4">
           {paidBookings.length > 0 ? (
             paidBookings.map(booking => (
-              <Card key={booking._id}>
+              <Card key={booking._id} className="hover:shadow-sm transition-shadow">
                 <CardContent className="p-6 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center">
-                      <CheckCircle className="h-5 w-5 text-success" />
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <CheckCircle className="h-6 w-6 text-green-600" />
                     </div>
                     <div>
-                      <p className="font-medium">Đặt cọc phòng {booking.HangPhong}</p>
-                      <p className="text-xs text-muted-foreground">Mã: {booking.MaDatPhong}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Ngày: {new Date(booking.updatedAt || booking.createdAt).toLocaleDateString('vi-VN')}
-                      </p>
+                      <p className="font-semibold text-lg">Đặt cọc phòng {booking.HangPhong}</p>
+                      <p className="text-xs text-muted-foreground">Mã: {booking.MaDatPhong} • Ngày: {new Date(booking.updatedAt || booking.createdAt).toLocaleDateString('vi-VN')}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-success">{booking.TienCoc?.toLocaleString()} VNĐ</p>
-                    <Badge variant="outline">Chuyển khoản</Badge>
+                    <p className="font-bold text-lg text-green-600">+{booking.TienCoc?.toLocaleString()} VNĐ</p>
+                    <Badge variant="secondary" className="font-normal">Hoàn tất</Badge>
                   </div>
                 </CardContent>
               </Card>
             ))
           ) : (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">Chưa có lịch sử giao dịch</CardContent></Card>
+            <Card className="bg-muted/50 border-dashed">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Clock className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>Bạn chưa có lịch sử đặt cọc nào.</p>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
-        {/* Tab Hóa đơn (Invoices Completed) */}
         <TabsContent value="invoices" className="mt-6 space-y-4">
           {invoices.length > 0 ? (
             invoices.map(invoice => (
-              <Card key={invoice._id}>
-                <CardContent className="p-6 flex justify-between items-center">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold">Hóa đơn #{invoice.MaHD}</span>
-                      <Badge variant="default">Đã thanh toán</Badge>
+              <Card key={invoice._id} className="hover:shadow-sm transition-shadow">
+                <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="space-y-1 w-full md:w-auto">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-lg">Hóa đơn #{invoice.MaHD}</span>
+                      <Badge className="bg-blue-500 hover:bg-blue-600">Đã thanh toán</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Ngày lập: {new Date(invoice.NgayLap).toLocaleDateString('vi-VN')}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-xl text-primary">{invoice.TongThanhToan?.toLocaleString()} VNĐ</p>
-                    <p className="text-xs text-muted-foreground">Tổng tiền dịch vụ: {invoice.TongTienDichVu?.toLocaleString()} VNĐ</p>
+                  <div className="text-right w-full md:w-auto border-t md:border-0 pt-4 md:pt-0">
+                    <p className="text-xs text-muted-foreground">Tổng thanh toán</p>
+                    <p className="font-bold text-2xl text-primary">{invoice.TongThanhToan?.toLocaleString()} VNĐ</p>
+                    <p className="text-xs text-muted-foreground">Phí dịch vụ: {invoice.TongTienDichVu?.toLocaleString()} VNĐ</p>
                   </div>
                 </CardContent>
               </Card>
             ))
           ) : (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">Chưa có hóa đơn nào</CardContent></Card>
+            <Card className="bg-muted/50 border-dashed">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>Bạn chưa có hóa đơn thanh toán cuối cùng nào.</p>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
       </Tabs>
 
-      {/* Popup thanh toán */}
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Thanh toán đặt cọc</DialogTitle>
-            <DialogDescription>Chọn hình thức thanh toán</DialogDescription>
+            <DialogTitle>Thanh toán trực tuyến</DialogTitle>
+            <DialogDescription>Vui lòng chọn phương thức thanh toán phù hợp</DialogDescription>
           </DialogHeader>
           {selectedBooking && (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-lg space-y-2">
-                <div className="flex justify-between">
-                  <span>Mã đặt phòng:</span>
-                  <span className="font-medium">{selectedBooking.MaDatPhong}</span>
+            <div className="space-y-6 py-4">
+              <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Dịch vụ:</span>
+                  <span className="font-medium text-foreground">Đặt cọc phòng {selectedBooking.HangPhong}</span>
                 </div>
-                <div className="flex justify-between border-t border-gray-200 pt-2">
-                  <span>Số tiền cọc:</span>
-                  <span className="font-bold text-primary text-lg">{selectedBooking.TienCoc?.toLocaleString()} VNĐ</span>
+                <div className="flex justify-between items-center pt-2 border-t border-primary/10">
+                  <span className="text-sm font-semibold">Tổng cộng:</span>
+                  <span className="font-bold text-2xl text-primary">{selectedBooking.TienCoc?.toLocaleString()} VNĐ</span>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Phương thức thanh toán</Label>
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
+              <div className="space-y-3">
+                <Label className="text-base">Phương thức thanh toán</Label>
+                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="grid gap-3">
                   {paymentMethods.map(method => (
-                    <div key={method.id} className="flex items-center space-x-2 border p-3 rounded cursor-pointer hover:bg-accent">
+                    <div key={method.id} className="flex items-center space-x-3 border rounded-xl p-4 cursor-pointer hover:bg-accent transition-colors">
                       <RadioGroupItem value={method.id} id={method.id} />
-                      <Label htmlFor={method.id} className="cursor-pointer flex-1">{method.name}</Label>
+                      <Label htmlFor={method.id} className="flex items-center gap-3 cursor-pointer flex-1 font-medium">
+                        <method.icon className="h-5 w-5 text-primary" />
+                        {method.name}
+                      </Label>
                     </div>
                   ))}
                 </RadioGroup>
               </div>
 
               {paymentMethod === 'banking' && (
-                <div className="text-sm text-muted-foreground p-2 bg-yellow-50 border border-yellow-100 rounded">
-                  <p>Ngân hàng: <strong>Vietcombank</strong></p>
-                  <p>STK: <strong>0123456789</strong></p>
-                  <p>Nội dung: <strong>{selectedBooking.MaDatPhong}</strong></p>
-                  <p className="mt-1 text-xs">(Hệ thống sẽ tự động xác nhận sau khi bạn bấm xác nhận bên dưới)</p>
+                <div className="text-sm space-y-2 p-4 bg-yellow-50/50 border border-yellow-100 rounded-xl animate-in slide-in-from-top-2 duration-300">
+                  <p className="flex justify-between"><span>Ngân hàng:</span> <span className="font-bold">Vietcombank</span></p>
+                  <p className="flex justify-between"><span>Số tài khoản:</span> <span className="font-bold">0123456789</span></p>
+                  <p className="flex justify-between"><span>Nội dung CK:</span> <span className="font-bold text-primary">{selectedBooking.MaDatPhong}</span></p>
+                  <p className="mt-2 text-xs text-yellow-700 italic">Lưu ý: Hệ thống sẽ ghi nhận sau khi bạn nhấn "Xác nhận đã chuyển".</p>
                 </div>
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Hủy</Button>
-            <Button onClick={handleConfirmPayment} disabled={actionLoading}>
-              {actionLoading && <Loader2 className="animate-spin mr-2" />} Xác nhận đã thanh toán
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setPayDialogOpen(false)} className="flex-1">Đóng</Button>
+            <Button onClick={handleConfirmPayment} disabled={actionLoading} className="flex-1">
+              {actionLoading ? <Loader2 className="animate-spin h-4 w-4" /> : "Xác nhận thanh toán"}
             </Button>
           </DialogFooter>
         </DialogContent>

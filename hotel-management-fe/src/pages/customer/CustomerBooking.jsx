@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -20,550 +19,261 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
-import { roomApi, datPhongApi, customerApi, settingApi, stripeApi } from "@/api";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Autoplay } from "swiper/modules";
-import "swiper/css";
-import "swiper/css/autoplay";
-// Helper to decode JWT
-const parseJwt = (token) => {
-  try {
-    return JSON.parse(atob(token.split(".")[1]));
-  } catch (e) {
-    return null;
-  }
-};
-
-const initialRoomTypeInfo = {
-  Normal: {
-    price: 0,
-    description: "Phòng cơ bản, phù hợp nhu cầu ngắn ngày",
-    backendEnum: "Normal",
-    searchKeywords: ["normal", "cơ bản", "đơn", "phòng đơn"],
-  },
-  Standard: {
-    price: 0,
-    description: "Phòng tiêu chuẩn với đầy đủ tiện nghi",
-    backendEnum: "Standard",
-    searchKeywords: ["standard", "std", "tiêu chuẩn"],
-  },
-  Premium: {
-    price: 0,
-    description: "Phòng cao cấp với không gian rộng rãi",
-    backendEnum: "Premium",
-    searchKeywords: ["premium", "cao cấp", "đôi", "phòng đôi"],
-  },
-  Luxury: {
-    price: 0,
-    description: "Phòng sang trọng với dịch vụ cao cấp",
-    backendEnum: "Luxury",
-    searchKeywords: ["luxury", "vip", "sang trọng"],
-  },
-};
+import { Loader2, ArrowRight, ArrowLeft, CheckCircle2, Bed, Calendar, Users, Wallet } from "lucide-react";
+import { customerApi, momoApi, roomTypeApi } from "@/api";
 
 export default function CustomerBooking() {
-  const navigate = useNavigate();
   const [step, setStep] = useState(1);
-  const [selectedRoomType, setSelectedRoomType] = useState("");
-  const [numberOfGuests, setNumberOfGuests] = useState("2");
+  const [roomTypes, setRoomTypes] = useState([]);
+  const [selectedRoomTypeId, setSelectedRoomTypeId] = useState(null);
   const [checkInDate, setCheckInDate] = useState("");
   const [checkOutDate, setCheckOutDate] = useState("");
+  const [roomQuantity, setRoomQuantity] = useState(1);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
-  const [rooms, setRooms] = useState([]);
-  const [allBookings, setAllBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isBooking, setIsBooking] = useState(false);
   const [currentCustomer, setCurrentCustomer] = useState(null);
-  const [roomTypeInfo, setRoomTypeInfo] = useState(initialRoomTypeInfo);
-  const images = [
-    "https://cf.bstatic.com/xdata/images/hotel/max1024x768/163589466.jpg?k=f6595e4f13c2a5f394598a838f3d92191e96af6098975642694351457f9669d4&o=",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQB8ZYR72k8mzPijKS_-zvr7CWqkOwMlHmEaQ&s",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJtm1ldS2O3BnVzHowHZH4fBPUGhk_RTxSdQ&s",
-  ];
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [minGuests, setMinGuests] = useState("");
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-
-        // 0. Fetch Settings for dynamic prices
-        try {
-          const settingsRes = await settingApi.getSettings();
-          if (settingsRes?.data?.GiaPhongCoBan) {
-            const prices = settingsRes.data.GiaPhongCoBan;
-            setRoomTypeInfo((prev) => ({
-              ...prev,
-              Normal: {
-                ...prev.Normal,
-                price: prices.Normal || prev.Normal.price,
-              },
-              Standard: {
-                ...prev.Standard,
-                price: prices.Standard || prev.Standard.price,
-              },
-              Premium: {
-                ...prev.Premium,
-                price: prices.Premium || prev.Premium.price,
-              },
-              Luxury: {
-                ...prev.Luxury,
-                price: prices.Luxury || prev.Luxury.price,
-              },
-            }));
-          }
-        } catch (settingsErr) {
-          console.warn(
-            "Could not fetch settings for room prices, using defaults",
-            settingsErr
-          );
-        }
-
-        // 1. Fetch Rooms
-        const roomsData = await roomApi.getRooms();
-        setRooms(roomsData.data || []);
-
-        // 2. Fetch All Bookings (for availability check)
-        const bookingsRes = await datPhongApi.getBookings();
-        setAllBookings(bookingsRes.data || bookingsRes || []);
-
-        // 3. Identify Current Customer
-        const token = localStorage.getItem("token");
-        if (token) {
-          const decoded = parseJwt(token);
-          if (decoded && decoded.id) {
-            const customers = await customerApi.getCustomers();
-            const foundReq = customers.find((c) => {
-              if (!c.TaiKhoan) return false;
-              const taiKhoanId =
-                typeof c.TaiKhoan === "object" ? c.TaiKhoan._id : c.TaiKhoan;
-              return taiKhoanId === decoded.id;
-            });
-            if (foundReq) {
-              setCurrentCustomer(foundReq);
-            }
-          }
-        }
+        const [profileRes, roomTypesData] = await Promise.all([
+          customerApi.getMyProfile(),
+          roomTypeApi.getRoomTypes()
+        ]);
+        setCurrentCustomer(profileRes.data || profileRes);
+        setRoomTypes(roomTypesData || []);
+        if (roomTypesData?.length > 0) setSelectedRoomTypeId(roomTypesData[0]._id);
       } catch (error) {
-        console.error("Error initializing booking page:", error);
-        toast({
-          title: "Lỗi",
-          description: "Không thể tải dữ liệu.",
-          variant: "destructive",
-        });
+        console.error("Error fetching booking data:", error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
-  // Filter Logic
-  const getAvailableRooms = () => {
-    // 1. Filter by Status (Static)
-    // Rooms must be 'Available' (not Reserved, Occupied, or Maintenance)
-    let candidates = rooms.filter(
-      (r) => r.status === "available" || r.TrangThai === "Available"
-    );
+  const filteredRoomTypes = useMemo(() => {
+    return roomTypes.filter(type => {
+      const matchesSearch = type.TenLoaiPhong.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesPrice = maxPrice === "" || type.DonGia <= parseInt(maxPrice);
+      const matchesGuests = minGuests === "" || type.SoKhachToiDa >= parseInt(minGuests);
+      return matchesSearch && matchesPrice && matchesGuests;
+    });
+  }, [roomTypes, searchTerm, maxPrice, minGuests]);
 
-    // 2. Filter by Type (Strict match first, then keywords)
-    if (selectedRoomType) {
-      candidates = candidates.filter((r) => {
-        const roomTypeName =
-          r.LoaiPhong?.TenLoaiPhong || r.LoaiPhong || r.type || "";
-
-        // Strict match against category name
-        if (roomTypeName === selectedRoomType) return true;
-
-        // Fallback to keywords
-        const typeConfig = roomTypeInfo[selectedRoomType];
-        const keywords = typeConfig
-          ? typeConfig.searchKeywords
-          : [selectedRoomType.toLowerCase()];
-        return keywords.some((k) =>
-          roomTypeName.toLowerCase().includes(k.toLowerCase())
-        );
-      });
-    }
-
-    // 3. Filter by Date Overlap (If dates selected)
-    if (checkInDate && checkOutDate) {
-      const requestedStart = new Date(checkInDate);
-      const requestedEnd = new Date(checkOutDate);
-
-      // Find rooms that are busy
-      const busyRoomIds = new Set();
-
-      allBookings.forEach((b) => {
-        // Only care about active bookings
-        if (
-          [
-            "Cancelled",
-            "NoShow",
-            "CheckedOut",
-            "Completed",
-            "Pending",
-          ].includes(b.TrangThai)
-        )
-          return;
-
-        const bookingStart = new Date(b.NgayDen);
-        const bookingEnd = new Date(b.NgayDi);
-
-        // Check overlap: (StartA < EndB) && (EndA > StartB)
-        // Using strict comparison for days
-        if (requestedStart < bookingEnd && requestedEnd > bookingStart) {
-          // This booking overlaps. Mark its rooms as busy.
-          if (b.ChiTietDatPhong && Array.isArray(b.ChiTietDatPhong)) {
-            b.ChiTietDatPhong.forEach((detail) => {
-              const roomId =
-                typeof detail.Phong === "object"
-                  ? detail.Phong._id
-                  : detail.Phong;
-              if (roomId) busyRoomIds.add(roomId);
-            });
-          }
-        }
-      });
-
-      candidates = candidates.filter((r) => !busyRoomIds.has(r._id));
-    }
-
-    return candidates;
-  };
-
-  const availableRooms = getAvailableRooms();
-
-  const calculateNights = () => {
-    if (!checkInDate || !checkOutDate) return 0;
-    const start = new Date(checkInDate);
-    const end = new Date(checkOutDate);
-    const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 0;
-  };
-
-  const nights = calculateNights();
-  const roomInfo = roomTypeInfo[selectedRoomType];
-  const totalAmount = roomInfo ? roomInfo.price * nights : 0;
+  const selectedRoomType = roomTypes.find(rt => rt._id === selectedRoomTypeId);
+  const nights = (checkInDate && checkOutDate) ? Math.ceil((new Date(checkOutDate) - new Date(checkInDate)) / (1000 * 60 * 60 * 24)) : 0;
+  const totalAmount = (selectedRoomType?.DonGia || 0) * (nights > 0 ? nights : 0) * roomQuantity;
   const depositAmount = Math.round(totalAmount * 0.3);
 
-  const validateStep1 = () => {
-    if (!selectedRoomType) {
-      toast({ title: "Vui lòng chọn loại phòng", variant: "destructive" });
-      return false;
-    }
-    return true;
-  };
-
-  const validateStep2 = () => {
-    if (!checkInDate || !checkOutDate) {
-      toast({ title: "Vui lòng chọn ngày", variant: "destructive" });
-      return false;
-    }
-
-    const start = new Date(checkInDate);
-    const end = new Date(checkOutDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (start < today) {
-      toast({
-        title: "Ngày nhận phòng không hợp lệ",
-        description: "Không thể chọn ngày trong quá khứ",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    if (end <= start) {
-      toast({
-        title: "Ngày trả phòng không hợp lệ",
-        description: "Phải sau ngày nhận phòng",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    if (availableRooms.length === 0) {
-      toast({
-        title: "Hết phòng",
-        description: `Không còn phòng ${selectedRoomType} trống trong khoảng thời gian này.`,
-        variant: "destructive",
-      });
-      return false;
-    }
-    return true;
-  };
-
   const handleNext = () => {
-    if (step === 1 && validateStep1()) {
-      setStep(2);
-    } else if (step === 2 && validateStep2()) {
-      setStep(3);
+    if (step === 1 && !selectedRoomTypeId) return toast({ title: "Chọn loại phòng", variant: "destructive" });
+    if (step === 2) {
+      if (!checkInDate || !checkOutDate) return toast({ title: "Chọn ngày", variant: "destructive" });
+      if (new Date(checkInDate) < new Date().setHours(0,0,0,0)) return toast({ title: "Ngày không hợp lệ", variant: "destructive" });
+      if (new Date(checkOutDate) <= new Date(checkInDate)) return toast({ title: "Ngày không hợp lệ", variant: "destructive" });
     }
+    setStep(step + 1);
   };
 
   const handleConfirmBooking = async () => {
-    if (!currentCustomer) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng đăng nhập lại",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Double check availability before submit
-    if (availableRooms.length === 0) {
-      toast({
-        title: "Lỗi",
-        description: "Phòng vừa được đặt bởi người khác.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const selectedRoom = availableRooms[0];
-    const timestamp = Date.now();
-
-    const payload = {
-      KhachHang: currentCustomer._id,
-      HangPhong: roomTypeInfo[selectedRoomType]?.backendEnum || "Standard",
-      NgayDen: checkInDate,
-      NgayDi: checkOutDate,
-      SoKhach: parseInt(numberOfGuests),
-      TienCoc: depositAmount,
-      // Pass the specific room selected by the filter if available,
-      // otherwise let backend auto-assign (though frontend validates availableRooms.length > 0)
-      ChiTietDatPhong: selectedRoom
-        ? [{ MaCTDP: `CTDP${timestamp}`, Phong: selectedRoom._id }]
-        : [],
-    };
-
     try {
       setIsBooking(true);
-      
-      // Create booking with Pending status and get Stripe checkout URL
-      const { url } = await stripeApi.createCheckoutSession(payload);
-      
-      // Redirect to Stripe checkout page
-      if (url) {
-        window.location.href = url;
-      } else {
-        throw new Error("Không thể tạo phiên thanh toán");
-      }
+      const payload = {
+        KhachHang: currentCustomer._id,
+        HangPhong: selectedRoomType._id,
+        NgayDen: checkInDate,
+        NgayDi: checkOutDate,
+        SoLuongPhong: parseInt(roomQuantity),
+        TienCoc: depositAmount,
+      };
+      const { payUrl } = await momoApi.createPayment(payload);
+      if (payUrl) window.location.href = payUrl;
+      else throw new Error("Khởi tạo thanh toán MoMo thất bại");
     } catch (error) {
-      toast({
-        title: "Thất bại",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
       setIsBooking(false);
     }
   };
 
+  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">
-          Đặt phòng trực tuyến
-        </h1>
-        <p className="text-muted-foreground">Chọn loại phòng và ngày lưu trú</p>
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="text-center space-y-2">
+        <h1 className="text-4xl font-extrabold tracking-tight">Đặt phòng khách sạn</h1>
+        <p className="text-muted-foreground text-lg">Trải nghiệm kỳ nghỉ tuyệt vời theo cách của bạn</p>
       </div>
 
-      <div className="flex items-center justify-center gap-4">
+      {/* Progress Stepper */}
+      <div className="relative flex justify-between items-center px-8">
+        <div className="absolute top-1/2 left-0 w-full h-0.5 bg-muted -z-10" />
         {[1, 2, 3].map((s) => (
-          <div key={s} className="flex items-center">
-            <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${
-                step >= s
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {s}
+          <div key={s} className="flex flex-col items-center gap-2 bg-background px-2">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all border-4 border-background ${
+              step >= s ? "bg-primary text-primary-foreground scale-110 shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground"
+            }`}>
+              {step > s ? <CheckCircle2 className="h-5 w-5" /> : s}
             </div>
-            {s < 3 && <div className="w-12 h-1 mx-4 bg-muted" />}
+            <span className={`text-xs font-bold uppercase tracking-tighter ${step >= s ? "text-primary" : "text-muted-foreground"}`}>
+              {s === 1 ? "Loại phòng" : s === 2 ? "Thời gian" : "Thanh toán"}
+            </span>
           </div>
         ))}
       </div>
 
-      {loading ? (
-        <Loader2 className="animate-spin mx-auto" />
-      ) : (
-        <>
-          {step === 1 && (
-            <div className="grid gap-6 md:grid-cols-2">
-              {Object.entries(roomTypeInfo).map(([type, info]) => (
-                <Card
-                  key={type}
-                  className={`cursor-pointer ${
-                    selectedRoomType === type ? "ring-2 ring-primary" : ""
-                  }`}
-                  onClick={() => setSelectedRoomType(type)}
-                >
-                  <CardHeader>
-                    <CardTitle>{type}</CardTitle>
-                    <CardDescription>{info.description}</CardDescription>
+      {step === 1 && (
+        <div className="space-y-6">
+          <Card className="bg-muted/30 border-none shadow-none">
+            <CardContent className="p-4 grid gap-4 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="search" className="text-xs font-bold uppercase">Tìm kiếm</Label>
+                <Input 
+                  id="search"
+                  placeholder="Tên loại phòng..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-background"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="price" className="text-xs font-bold uppercase">Giá tối đa (VNĐ)</Label>
+                <Input 
+                  id="price"
+                  type="number"
+                  placeholder="Ví dụ: 1000000" 
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  className="bg-background"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="guests" className="text-xs font-bold uppercase">Số khách tối thiểu</Label>
+                <Input 
+                  id="guests"
+                  type="number"
+                  placeholder="Ví dụ: 2" 
+                  value={minGuests}
+                  onChange={(e) => setMinGuests(e.target.value)}
+                  className="bg-background"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 sm:grid-cols-2 animate-in slide-in-from-right-4 duration-300">
+            {filteredRoomTypes.length > 0 ? (
+              filteredRoomTypes.map((type) => (
+                <Card key={type._id} className={`cursor-pointer transition-all hover:shadow-md ${selectedRoomTypeId === type._id ? "ring-2 ring-primary bg-primary/5" : ""}`} onClick={() => setSelectedRoomTypeId(type._id)}>
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-xl font-bold">{type.TenLoaiPhong}</CardTitle>
+                      <Bed className={`h-5 w-5 ${selectedRoomTypeId === type._id ? "text-primary" : "text-muted-foreground"}`} />
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Users className="h-3 w-3" /> Tối đa: {type.SoKhachToiDa} khách
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[300px] w-full rounded-lg overflow-hidden border border-border shadow-sm">
-                      <Swiper
-                        modules={[Autoplay]}
-                        autoplay={{ delay: 1567, disableOnInteraction: false }}
-                        loop
-                        className="h-full w-full"
-                      >
-                        {rooms[0].img && rooms[0].img.length > 0 ? (
-                          rooms[0].img.map((img, idx) => (
-                            <SwiperSlide
-                              key={idx}
-                              className="flex items-center justify-center bg-muted"
-                            >
-                              <img
-                                src={img}
-                                alt={`Phòng ${idx + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                            </SwiperSlide>
-                          ))
-                        ) : (
-                          <SwiperSlide className="flex items-center justify-center bg-muted">
-                            <span className="text-muted-foreground">
-                              Không có hình ảnh
-                            </span>
-                          </SwiperSlide>
-                        )}
-                      </Swiper>
-                    </div>
-                    <div className="font-bold text-lg text-primary">
-                      {info.price.toLocaleString()} VNĐ
-                    </div>
+                    <p className="text-2xl font-black text-primary">{type.DonGia?.toLocaleString()} VNĐ <span className="text-xs font-normal text-muted-foreground">/ đêm</span></p>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
-
-          {step === 2 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Chi tiết lưu trú</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Ngày nhận</Label>
-                    <Input
-                      type="date"
-                      value={checkInDate}
-                      onChange={(e) => setCheckInDate(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>Ngày trả</Label>
-                    <Input
-                      type="date"
-                      value={checkOutDate}
-                      onChange={(e) => setCheckOutDate(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="bg-muted p-4 rounded flex justify-between items-center">
-                  <span>Phòng trống ({selectedRoomType}):</span>
-                  <Badge
-                    variant={
-                      availableRooms.length > 0 ? "success" : "destructive"
-                    }
-                  >
-                    {availableRooms.length} phòng
-                  </Badge>
-                </div>
-                {availableRooms.length === 0 && checkInDate && checkOutDate && (
-                  <p className="text-sm text-destructive">
-                    Không có phòng trống trong khoảng thời gian này.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {step === 3 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Xác nhận</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Phòng:</span>
-                    <strong>{selectedRoomType}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Ngày:</span>
-                    <strong>
-                      {checkInDate} - {checkOutDate}
-                    </strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Phòng số:</span>
-                    <strong>
-                      {availableRooms[0]?.SoPhong} ({availableRooms.length}{" "}
-                      available)
-                    </strong>
-                  </div>
-                  <div className="flex justify-between text-xl font-bold border-t pt-2">
-                    <span>Tổng:</span>
-                    <span>{totalAmount.toLocaleString()} VNĐ</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Đặt cọc (30%):</span>
-                    <span>{depositAmount.toLocaleString()} VNĐ</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="flex justify-between pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setStep((s) => s - 1)}
-              disabled={step === 1}
-            >
-              Quay lại
-            </Button>
-            {step < 3 ? (
-              <Button onClick={handleNext}>Tiếp tục</Button>
+              ))
             ) : (
-              <Button onClick={() => setConfirmDialogOpen(true)}>
-                Thanh toán cọc & Đặt phòng
-              </Button>
+              <div className="col-span-full py-12 text-center bg-muted/20 rounded-xl border-2 border-dashed">
+                <p className="text-muted-foreground font-medium">Không tìm thấy loại phòng phù hợp với bộ lọc.</p>
+                <Button variant="link" onClick={() => { setSearchTerm(""); setMaxPrice(""); setMinGuests(""); }}>Xóa bộ lọc</Button>
+              </div>
             )}
           </div>
-
-          <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Xác nhận đặt phòng?</DialogTitle>
-              </DialogHeader>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setConfirmDialogOpen(false)}
-                >
-                  Hủy
-                </Button>
-                <Button onClick={handleConfirmBooking} disabled={isBooking}>
-                  {isBooking && <Loader2 className="animate-spin mr-2" />} Đồng
-                  ý
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </>
+        </div>
       )}
+
+      {step === 2 && (
+        <Card className="animate-in slide-in-from-right-4 duration-300">
+          <CardHeader>
+            <CardTitle>Thời gian & Số lượng</CardTitle>
+            <CardDescription>Vui lòng chọn ngày nhận/trả phòng và số lượng phòng.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-8">
+            <div className="grid sm:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Ngày nhận phòng</Label>
+                <Input type="date" className="h-12" value={checkInDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setCheckInDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Ngày trả phòng</Label>
+                <Input type="date" className="h-12" value={checkOutDate} min={checkInDate || new Date().toISOString().split('T')[0]} onChange={(e) => setCheckOutDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2"><Bed className="h-4 w-4" /> Số lượng phòng muốn đặt</Label>
+              <div className="flex items-center gap-6">
+                <Button variant="outline" size="icon" className="h-12 w-12" onClick={() => setRoomQuantity(Math.max(1, roomQuantity - 1))}>-</Button>
+                <span className="text-3xl font-black w-12 text-center">{roomQuantity}</span>
+                <Button variant="outline" size="icon" className="h-12 w-12" onClick={() => setRoomQuantity(roomQuantity + 1)}>+</Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 3 && (
+        <Card className="overflow-hidden animate-in zoom-in-95 duration-300 shadow-xl border-primary/20">
+          <div className="bg-primary/5 p-6 border-b text-center">
+            <CardTitle className="text-2xl">Xác nhận đặt phòng</CardTitle>
+          </div>
+          <CardContent className="p-8 space-y-6">
+            <div className="grid grid-cols-2 gap-y-4 text-sm border-b pb-6">
+              <div className="text-muted-foreground">Loại phòng:</div>
+              <div className="text-right font-bold">{selectedRoomType?.TenLoaiPhong}</div>
+              <div className="text-muted-foreground">Thời gian:</div>
+              <div className="text-right font-semibold">{checkInDate} → {checkOutDate} ({nights} đêm)</div>
+              <div className="text-muted-foreground">Số lượng phòng:</div>
+              <div className="text-right font-semibold">{roomQuantity} phòng</div>
+            </div>
+            <div className="space-y-4 pt-2">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-medium">Tổng tiền:</span>
+                <span className="text-3xl font-black text-primary">{totalAmount.toLocaleString()} VNĐ</span>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 flex justify-between items-center text-orange-700">
+                <div className="flex items-center gap-2 font-bold"><Wallet className="h-5 w-5" /> Tiền cọc (30%)</div>
+                <div className="text-xl font-black">{depositAmount.toLocaleString()} VNĐ</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex justify-between items-center pt-4">
+        <Button variant="ghost" className="gap-2" onClick={() => setStep(step - 1)} disabled={step === 1}>
+          <ArrowLeft className="h-4 w-4" /> Quay lại
+        </Button>
+        <Button size="lg" className="px-10 gap-2 shadow-lg" onClick={step < 3 ? handleNext : () => setConfirmDialogOpen(true)}>
+          {step === 3 ? "Thanh toán ngay" : "Tiếp theo"} <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Tiến hành đặt cọc</DialogTitle></DialogHeader>
+          <DialogDescription>Hệ thống sẽ chuyển bạn đến ứng dụng MoMo để thực hiện thanh toán {depositAmount.toLocaleString()} VNĐ an toàn.</DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" className="flex-1" onClick={() => setConfirmDialogOpen(false)}>Hủy</Button>
+            <Button className="flex-1" onClick={handleConfirmBooking} disabled={isBooking}>
+              {isBooking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Xác nhận"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

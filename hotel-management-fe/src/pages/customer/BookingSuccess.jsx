@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle2 } from "lucide-react";
-import { stripeApi } from "@/api";
+import { momoApi } from "@/api";
 
 export default function BookingSuccess() {
   const navigate = useNavigate();
@@ -21,18 +21,27 @@ export default function BookingSuccess() {
 
   useEffect(() => {
     const verifyPayment = async () => {
-      const sessionId = searchParams.get("session_id");
-      const bookingId = searchParams.get("booking_id");
+      // MoMo trả về các params như: signature, resultCode, orderId, extraData...
+      const resultCode = searchParams.get("resultCode");
+      
+      if (resultCode === null) {
+        setError("Không tìm thấy thông tin xác thực thanh toán MoMo");
+        setLoading(false);
+        return;
+      }
 
-      if (!sessionId || !bookingId) {
-        setError("Thiếu thông tin xác thực thanh toán");
+      if (resultCode !== "0") {
+        setError(`Thanh toán thất bại (Mã lỗi: ${resultCode})`);
         setLoading(false);
         return;
       }
 
       try {
-        const bookingData = await stripeApi.verifyPayment(sessionId, bookingId);
+        // Gửi toàn bộ params lên BE để verify chữ ký và cập nhật DB
+        const queryObj = Object.fromEntries(searchParams.entries());
+        const bookingData = await momoApi.verifyRedirect(queryObj);
         setBooking(bookingData);
+        
         toast({
           title: "Thanh toán thành công!",
           description: "Đặt phòng của bạn đã được xác nhận.",
@@ -97,7 +106,7 @@ export default function BookingSuccess() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Loại phòng</p>
-                <p className="font-medium">{booking.HangPhong}</p>
+                <p className="font-medium">{booking.HangPhongDisplayName || booking.HangPhong}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Trạng thái</p>
