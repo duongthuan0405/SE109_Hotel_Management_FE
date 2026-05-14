@@ -1,30 +1,44 @@
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
+# =========================================
+# Stage 1: Build the React.js Application
+# =========================================
 
-# Stage 2: Builder
-FROM node:20-alpine AS builder
+# Use a lightweight Node.js image for building (customizable via ARG)
+FROM dhi.io/node:24-alpine3.22-dev AS builder
+
+# Set the working directory inside the container
 WORKDIR /app
-COPY --from=deps /app/node_modules/ ./node_modules/
+
+# Copy package-related files first to leverage Docker's caching mechanism
+COPY package.json package-lock.json* ./
+
+# Install project dependencies using npm ci (ensures a clean, reproducible install)
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+# Copy the rest of the application source code into the container
 COPY . .
+
+# Build the React.js application (outputs to /app/dist)
 RUN npm run build
 
-# Stage 3: Runner (Production)
-FROM node:20-alpine AS runner
+# =========================================
+# Stage 2: Prepare Nginx to Serve Static Files
+# =========================================
 
-WORKDIR /app
+FROM dhi.io/nginx:1.28.0-alpine3.21-dev AS runner
 
-# Set môi trường production
-ENV NODE_ENV=production
+# Copy custom Nginx config
+COPY nginx.conf /etc/nginx/nginx.conf
 
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/next.config.* ./
+# Copy the static build output from the build stage to Nginx's default HTML serving directory
+COPY --chown=nginx:nginx --from=builder /app/dist /usr/share/nginx/html
 
-EXPOSE 3000
+# Use a non-root user for security best practices
+USER nginx
 
-CMD ["npm", "run", "start"]
+# Expose port 8080 to allow HTTP traffic
+# Note: The default NGINX container now listens on port 8080 instead of 80 
+EXPOSE 8080
+
+# Start Nginx directly with custom config
+ENTRYPOINT ["nginx", "-c", "/etc/nginx/nginx.conf"]
+CMD ["-g", "daemon off;"]
