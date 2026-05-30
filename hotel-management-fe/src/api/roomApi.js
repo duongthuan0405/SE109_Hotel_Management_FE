@@ -88,7 +88,7 @@ const changeRoomStatus = async (id, TrangThai) => {
     const res = await fetch(`${API_URL}/${id}/status`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ TrangThai })
+      body: JSON.stringify({ status: TrangThai })
     });
     if (!res.ok) {
       const err = await res.json();
