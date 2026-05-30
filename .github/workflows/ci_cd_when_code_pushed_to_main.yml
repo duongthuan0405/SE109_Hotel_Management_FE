@@ -36,6 +36,8 @@ jobs:
   build-container-and-push-to-registry:
     runs-on: ubuntu-latest
     needs: checkout-and-build
+    environment:
+      name: production
 
     steps:
       - name: Checkout code from main branch
@@ -47,6 +49,11 @@ jobs:
       - name: Sign in to Docker Hub
         run: |
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Setup environment variables for frontend
+        working-directory: ./hotel-management-fe
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env.production
 
       - name: Build and push Docker image
         working-directory: ./hotel-management-fe
