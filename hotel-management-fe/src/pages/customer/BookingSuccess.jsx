@@ -100,55 +100,56 @@ export default function BookingSuccess() {
         <Card>
           <CardHeader>
             <CardTitle>Thông tin đặt phòng</CardTitle>
-            <CardDescription>Mã đặt phòng: {booking.MaDatPhong}</CardDescription>
+            <CardDescription>Mã đặt phòng: {booking.code || booking.MaDatPhong}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Loại phòng</p>
-                <p className="font-medium">{booking.HangPhongDisplayName || booking.HangPhong}</p>
+                <p className="font-medium">{booking.roomClass || booking.HangPhongDisplayName || booking.HangPhong}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Trạng thái</p>
                 <p className="font-medium text-green-600">
-                  {booking.TrangThai === "DepositPaid"
-                    ? "Đã đặt cọc"
-                    : booking.TrangThai}
+                  {booking.status === "Confirmed" ? "Đã xác nhận (Đã đặt cọc)"
+                    : booking.status === "Pending" ? "Chờ thanh toán"
+                    : booking.TrangThai === "DepositPaid" ? "Đã đặt cọc"
+                    : (booking.status || booking.TrangThai)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Ngày nhận phòng</p>
                 <p className="font-medium">
-                  {new Date(booking.NgayDen).toLocaleDateString("vi-VN")}
+                  {new Date(booking.startDate || booking.NgayDen).toLocaleDateString("vi-VN")}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Ngày trả phòng</p>
                 <p className="font-medium">
-                  {new Date(booking.NgayDi).toLocaleDateString("vi-VN")}
+                  {new Date(booking.endDate || booking.NgayDi).toLocaleDateString("vi-VN")}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Số khách</p>
-                <p className="font-medium">{booking.SoKhach} người</p>
+                <p className="text-sm text-muted-foreground">Số lượng phòng</p>
+                <p className="font-medium">{booking.roomQuantity || booking.SoLuongPhong || 1} phòng</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Tiền cọc đã thanh toán</p>
                 <p className="font-medium text-primary">
-                  {booking.TienCoc?.toLocaleString()} VNĐ
+                  {(booking.deposit || booking.TienCoc || 0).toLocaleString()} VNĐ
                 </p>
               </div>
             </div>
 
-            {booking.ChiTietDatPhong && booking.ChiTietDatPhong.length > 0 && (
+            {(booking.details || booking.ChiTietDatPhong) && (booking.details || booking.ChiTietDatPhong).length > 0 && (
               <div className="border-t pt-4">
                 <p className="text-sm text-muted-foreground mb-2">Phòng được gán</p>
                 <div className="flex gap-2">
-                  {booking.ChiTietDatPhong.map((ct, idx) => {
-                    const phong = ct.Phong;
+                  {(booking.details || booking.ChiTietDatPhong).map((ct, idx) => {
+                    const phong = ct.room || ct.Phong;
                     const roomNumber = typeof phong === 'object' 
-                      ? (phong?.SoPhong || phong?.MaPhong || 'N/A')
-                      : phong;
+                      ? (phong?.number || phong?.SoPhong || phong?.MaPhong || 'N/A')
+                      : (ct.roomId || phong);
                     return (
                       <span
                         key={idx}
