@@ -4,18 +4,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { User, Loader2 } from "lucide-react";
-import { customerApi } from "@/api";
+import { User, Loader2, KeyRound } from "lucide-react";
+import { customerApi, accountApi } from "@/api";
 
 export default function CustomerProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
     idNumber: "",
     address: "",
+  });
+  const [passwordData, setPasswordData] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: ""
   });
 
   useEffect(() => {
@@ -49,6 +55,39 @@ export default function CustomerProfile() {
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handlePasswordChange = (e) => {
+    setPasswordData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSavePassword = async () => {
+    if (!passwordData.oldPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      toast({ title: "Lỗi", description: "Vui lòng điền đầy đủ thông tin mật khẩu", variant: "destructive" });
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({ title: "Lỗi", description: "Mật khẩu xác nhận không khớp", variant: "destructive" });
+      return;
+    }
+    if (passwordData.newPassword.length < 6) {
+      toast({ title: "Lỗi", description: "Mật khẩu mới phải có ít nhất 6 ký tự", variant: "destructive" });
+      return;
+    }
+    
+    try {
+      setSavingPassword(true);
+      await accountApi.changePassword("me", {
+        MatKhauCu: passwordData.oldPassword,
+        MatKhauMoi: passwordData.newPassword
+      });
+      toast({ title: "Thành công", description: "Đổi mật khẩu thành công" });
+      setPasswordData({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (error) {
+      toast({ title: "Lỗi", description: error.message || "Không thể đổi mật khẩu", variant: "destructive" });
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   const handleSave = async () => {
@@ -149,6 +188,57 @@ export default function CustomerProfile() {
             <Button onClick={handleSave} disabled={saving} size="lg">
               {saving && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
               Lưu thay đổi
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5" /> Đổi mật khẩu
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="oldPassword">Mật khẩu cũ</Label>
+              <Input 
+                id="oldPassword" 
+                name="oldPassword" 
+                type="password"
+                placeholder="Nhập mật khẩu hiện tại"
+                value={passwordData.oldPassword} 
+                onChange={handlePasswordChange} 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">Mật khẩu mới</Label>
+              <Input 
+                id="newPassword" 
+                name="newPassword" 
+                type="password"
+                placeholder="Nhập mật khẩu mới"
+                value={passwordData.newPassword} 
+                onChange={handlePasswordChange} 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Xác nhận mật khẩu mới</Label>
+              <Input 
+                id="confirmPassword" 
+                name="confirmPassword" 
+                type="password"
+                placeholder="Nhập lại mật khẩu mới"
+                value={passwordData.confirmPassword} 
+                onChange={handlePasswordChange} 
+              />
+            </div>
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button onClick={handleSavePassword} disabled={savingPassword} size="lg" variant="secondary">
+              {savingPassword && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
+              Đổi mật khẩu
             </Button>
           </div>
         </CardContent>
